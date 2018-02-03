@@ -154,7 +154,8 @@ def evaluate(
     iou_threshold=0.5,
     score_threshold=0.05,
     max_detections=100,
-    save_path=None
+    save_path=None,
+    diagnosis = False
 ):
     """ Evaluate a given dataset using a given model.
 
@@ -172,6 +173,9 @@ def evaluate(
     all_detections     = _get_detections(generator, model, score_threshold=score_threshold, max_detections=max_detections, save_path=save_path)
     all_annotations    = _get_annotations(generator)
     average_precisions = {}
+    recalls = {}
+    precisions = {}
+    return_scores = {}
 
     # all_detections = pickle.load(open('all_detections.pkl', 'rb'))
     # all_annotations = pickle.load(open('all_annotations.pkl', 'rb'))
@@ -232,5 +236,11 @@ def evaluate(
         # compute average precision
         average_precision  = _compute_ap(recall, precision)
         average_precisions[label] = average_precision
+        recalls[label] = recall
+        precisions[label] = precision
+        return_scores[label] = scores[indices]
 
-    return average_precisions
+    if diagnosis:
+      return average_precisions, recalls, precisions, return_scores
+    else:
+      return average_precisions

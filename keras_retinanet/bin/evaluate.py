@@ -61,6 +61,9 @@ def create_generator(args):
         validation_generator = CSVGenerator(
             args.annotations,
             args.classes,
+          base_dir = args.image_dir,
+              image_min_side=960,
+              image_max_side=1280,
         )
     else:
         raise ValueError('Invalid data type received: {}'.format(args.dataset_type))
@@ -89,6 +92,8 @@ def parse_args(args):
     parser.add_argument('--iou-threshold',   help='IoU Threshold to count for a positive detection (defaults to 0.5).', default=0.5, type=float)
     parser.add_argument('--max-detections',  help='Max Detections per image (defaults to 100).', default=100, type=int)
     parser.add_argument('--save-path',       help='Path for saving images with detections.')
+    parser.add_argument('--image_dir', help='wher images are.', required=True)
+    parser.add_argument('--output_metrics', help='save the precision recalls out')
 
     return parser.parse_args(args)
 
@@ -119,16 +124,17 @@ def main(args=None):
     model = keras.models.load_model(args.model, custom_objects=custom_objects)
 
     # print model summary
-    print(model.summary())
+    #print(model.summary())
 
     # start evaluation
-    average_precisions = evaluate(
+    average_precisions, recalls, precisions, scores = evaluate(
         generator,
         model,
         iou_threshold=args.iou_threshold,
         score_threshold=args.score_threshold,
         max_detections=args.max_detections,
-        save_path=args.save_path
+        save_path=args.save_path,
+      diagnosis = True
     )
 
     # print evaluation
@@ -136,5 +142,10 @@ def main(args=None):
         print(generator.label_to_name(label), '{:.4f}'.format(average_precision))
     print('mAP: {:.4f}'.format(sum(average_precisions.values()) / len(average_precisions)))
 
+    if args.output_metrics is not None:
+      import pickle
+      dataset = {'average_precisions': average_precisions, 'recalls': recalls, 'precisions': precisions, 'scores': scores}
+      with open(args.output_metrics, 'wb') as handle:
+        pickle.dump(dataset, handle, protocol=2)
 if __name__ == '__main__':
     main()

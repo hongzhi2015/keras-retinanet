@@ -13,10 +13,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-
+import os, sys
 import warnings
 
 import keras
+script_dir = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(os.path.join(script_dir, '../../../keras-resnet'))
 import keras_resnet
 import keras_resnet.models
 from ..models import retinanet
@@ -51,7 +53,7 @@ def download_imagenet(backbone):
 
 
 def resnet_retinanet(num_classes, backbone=50, inputs=None, weights='imagenet', skip_mismatch=True, **kwargs):
-    allowed_backbones = [50, 101, 152]
+    allowed_backbones = [18, 50, 101, 152]
     if backbone not in allowed_backbones:
         raise ValueError('Backbone (\'{}\') not in allowed backbones ({}).'.format(backbone, allowed_backbones))
 
@@ -68,7 +70,9 @@ def resnet_retinanet(num_classes, backbone=50, inputs=None, weights='imagenet', 
         weights_path = weights
 
     # create the resnet backbone
-    if backbone == 50:
+    if backbone == 18:
+        resnet = keras_resnet.models.ResNet18(inputs, include_top=False, freeze_bn=False, resnet_features=16)
+    elif backbone == 50:
         resnet = keras_resnet.models.ResNet50(inputs, include_top=False, freeze_bn=True)
     elif backbone == 101:
         resnet = keras_resnet.models.ResNet101(inputs, include_top=False, freeze_bn=True)
@@ -84,6 +88,9 @@ def resnet_retinanet(num_classes, backbone=50, inputs=None, weights='imagenet', 
 
     return model
 
+
+def resnet18_retinanet(num_classes, inputs=None, weights=None, skip_mismatch=True, **kwargs):
+    return resnet_retinanet(num_classes=num_classes, backbone=18, inputs=inputs, weights=weights, skip_mismatch=skip_mismatch, **kwargs)
 
 def resnet50_retinanet(num_classes, inputs=None, weights='imagenet', skip_mismatch=True, **kwargs):
     return resnet_retinanet(num_classes=num_classes, backbone=50, inputs=inputs, weights=weights, skip_mismatch=skip_mismatch, **kwargs)

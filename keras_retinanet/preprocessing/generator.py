@@ -92,8 +92,8 @@ class Generator(object):
                 (annotations[:, 3] <= annotations[:, 1]) |
                 (annotations[:, 0] < 0) |
                 (annotations[:, 1] < 0) |
-                (annotations[:, 2] > image.shape[1]) |
-                (annotations[:, 3] > image.shape[0])
+                (annotations[:, 0] > image.shape[1]) |
+                (annotations[:, 1] > image.shape[0])
             )[0]
 
             # delete invalid indices
@@ -104,6 +104,10 @@ class Generator(object):
                     [annotations[invalid_index, :] for invalid_index in invalid_indices]
                 ))
                 annotations_group[index] = np.delete(annotations, invalid_indices, axis=0)
+
+            # fix out of bound annotations
+            annotations_group[index][:, 2] = np.minimum(annotations_group[index][:, 2], image.shape[1])
+            annotations_group[index][:, 3] = np.minimum(annotations_group[index][:, 3], image.shape[0])
 
         return image_group, annotations_group
 

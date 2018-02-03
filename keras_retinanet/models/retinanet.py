@@ -31,13 +31,14 @@ custom_objects = {
     '_focal'                : losses.focal(),
 }
 
+FEATURE_SIZE = 64
 
 def default_classification_model(
     num_classes,
     num_anchors,
-    pyramid_feature_size=256,
+    pyramid_feature_size=FEATURE_SIZE,
     prior_probability=0.01,
-    classification_feature_size=256,
+    classification_feature_size=FEATURE_SIZE,
     name='classification_submodel'
 ):
     options = {
@@ -73,7 +74,7 @@ def default_classification_model(
     return keras.models.Model(inputs=inputs, outputs=outputs, name=name)
 
 
-def default_regression_model(num_anchors, pyramid_feature_size=256, regression_feature_size=256, name='regression_submodel'):
+def default_regression_model(num_anchors, pyramid_feature_size=FEATURE_SIZE, regression_feature_size=FEATURE_SIZE, name='regression_submodel'):
     # All new conv layers except the final one in the
     # RetinaNet (classification) subnets are initialized
     # with bias b = 0 and a Gaussian weight fill with stddev = 0.01.
@@ -101,7 +102,7 @@ def default_regression_model(num_anchors, pyramid_feature_size=256, regression_f
     return keras.models.Model(inputs=inputs, outputs=outputs, name=name)
 
 
-def __create_pyramid_features(C3, C4, C5, feature_size=256):
+def __create_pyramid_features(C3, C4, C5, feature_size=FEATURE_SIZE):
     # upsample C5 to get P5 from the FPN paper
     P5           = keras.layers.Conv2D(feature_size, kernel_size=1, strides=1, padding='same', name='P5')(C5)
     P5_upsampled = layers.UpsampleLike(name='P5_upsampled')([P5, C4])
@@ -145,6 +146,12 @@ AnchorParameters.default = AnchorParameters(
     scales  = np.array([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)], keras.backend.floatx()),
 )
 
+AnchorParameters.small = AnchorParameters(
+    sizes   = [32//2, 64//2, 128//2, 256//2, 512//2],
+    strides = [8, 16, 32, 64, 128],
+    ratios  = np.array([0.5, 1, 2], keras.backend.floatx()),
+    scales  = np.array([2 ** 0], keras.backend.floatx()),
+)
 
 def default_submodels(num_classes, anchor_parameters):
     return [
@@ -178,7 +185,7 @@ def retinanet(
     inputs,
     backbone,
     num_classes,
-    anchor_parameters       = AnchorParameters.default,
+    anchor_parameters       = AnchorParameters.small,
     create_pyramid_features = __create_pyramid_features,
     submodels               = None,
     name                    = 'retinanet'
@@ -198,7 +205,7 @@ def retinanet(
     return keras.models.Model(inputs=inputs, outputs=[anchors] + pyramid, name=name)
 
 
-def retinanet_bbox(inputs, num_classes, nms=True, name='retinanet-bbox', *args, **kwargs):
+def retinanet_bbox(inputs, num_classes, nms=True, nms_threshold=0.1, name='retinanet-bbox', *args, **kwargs):
     model = retinanet(inputs=inputs, num_classes=num_classes, *args, **kwargs)
 
     # we expect the anchors, regression and classification values as first output
@@ -212,7 +219,7 @@ def retinanet_bbox(inputs, num_classes, nms=True, name='retinanet-bbox', *args, 
 
     # additionally apply non maximum suppression
     if nms:
-        detections = layers.NonMaximumSuppression(name='nms')([boxes, classification, detections])
+        detections = layers.NonMaximumSuppression(name='nms', nms_threshold=nms_threshold)([boxes, classification, detections])
 
     # construct the model
     return keras.models.Model(inputs=inputs, outputs=model.outputs[1:] + [detections], name=name)

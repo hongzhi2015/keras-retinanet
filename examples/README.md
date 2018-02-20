@@ -1,6 +1,6 @@
 # Data collection
 
-## Double check the collected images to make sure orentation of the page is correct. Pay attention to numpy version, when >=1.12, should use this to get correct rotation:
+Double check the collected images to make sure orentation of the page is correct. Pay attention to numpy version, when >=1.12, should use this to get correct rotation:
 ```
 def rotateimage(img, degree):
     if degree != 0 :

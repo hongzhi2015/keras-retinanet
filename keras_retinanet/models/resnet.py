@@ -13,12 +13,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 """
-import os, sys
-import warnings
 
 import keras
-script_dir = os.path.dirname(os.path.realpath(__file__))
-sys.path.append(os.path.join(script_dir, '../../../keras-resnet'))
 import keras_resnet
 import keras_resnet.models
 from ..models import retinanet
@@ -52,7 +48,44 @@ def download_imagenet(backbone):
     )
 
 
-def resnet_retinanet(num_classes, backbone=50, inputs=None, weights='imagenet', skip_mismatch=True, **kwargs):
+# def resnet_retinanet(num_classes, backbone=50, inputs=None, weights='imagenet', skip_mismatch=True, **kwargs):
+#     allowed_backbones = [18, 50, 101, 152]
+#     if backbone not in allowed_backbones:
+#         raise ValueError('Backbone (\'{}\') not in allowed backbones ({}).'.format(backbone, allowed_backbones))
+#
+#     # choose default input
+#     if inputs is None:
+#         inputs = keras.layers.Input(shape=(None, None, 3))
+#
+#     # determine which weights to load
+#     if weights == 'imagenet':
+#         weights_path = download_imagenet(backbone)
+#     elif weights is None:
+#         weights_path = None
+#     else:
+#         weights_path = weights
+#
+#     # create the resnet backbone
+#     if backbone == 18:
+#         resnet = keras_resnet.models.ResNet18(inputs, include_top=False, freeze_bn=False, resnet_features=16)
+#     elif backbone == 50:
+#         resnet = keras_resnet.models.ResNet50(inputs, include_top=False, freeze_bn=True)
+#     elif backbone == 101:
+#         resnet = keras_resnet.models.ResNet101(inputs, include_top=False, freeze_bn=True)
+#     elif backbone == 152:
+#         resnet = keras_resnet.models.ResNet152(inputs, include_top=False, freeze_bn=True)
+#
+#     # create the full model
+#     model = retinanet.retinanet_bbox(inputs=inputs, num_classes=num_classes, backbone=resnet, **kwargs)
+#
+#     # optionally load weights
+#     if weights_path:
+#         model.load_weights(weights_path, by_name=True, skip_mismatch=skip_mismatch)
+#
+#     return model
+
+
+def resnet_retinanet(num_classes, backbone=50, inputs=None, **kwargs):
     allowed_backbones = [18, 50, 101, 152]
     if backbone not in allowed_backbones:
         raise ValueError('Backbone (\'{}\') not in allowed backbones ({}).'.format(backbone, allowed_backbones))
@@ -60,14 +93,6 @@ def resnet_retinanet(num_classes, backbone=50, inputs=None, weights='imagenet', 
     # choose default input
     if inputs is None:
         inputs = keras.layers.Input(shape=(None, None, 3))
-
-    # determine which weights to load
-    if weights == 'imagenet':
-        weights_path = download_imagenet(backbone)
-    elif weights is None:
-        weights_path = None
-    else:
-        weights_path = weights
 
     # create the resnet backbone
     if backbone == 18:
@@ -82,38 +107,20 @@ def resnet_retinanet(num_classes, backbone=50, inputs=None, weights='imagenet', 
     # create the full model
     model = retinanet.retinanet_bbox(inputs=inputs, num_classes=num_classes, backbone=resnet, **kwargs)
 
-    # optionally load weights
-    if weights_path:
-        model.load_weights(weights_path, by_name=True, skip_mismatch=skip_mismatch)
-
     return model
 
 
-def resnet18_retinanet(num_classes, inputs=None, weights=None, skip_mismatch=True, **kwargs):
-    return resnet_retinanet(num_classes=num_classes, backbone=18, inputs=inputs, weights=weights, skip_mismatch=skip_mismatch, **kwargs)
-
-def resnet50_retinanet(num_classes, inputs=None, weights='imagenet', skip_mismatch=True, **kwargs):
-    return resnet_retinanet(num_classes=num_classes, backbone=50, inputs=inputs, weights=weights, skip_mismatch=skip_mismatch, **kwargs)
+def resnet18_retinanet(num_classes, inputs=None, **kwargs):
+    return resnet_retinanet(num_classes=num_classes, backbone=18, inputs=inputs, **kwargs)
 
 
-def resnet101_retinanet(num_classes, inputs=None, weights='imagenet', skip_mismatch=True, **kwargs):
-    return resnet_retinanet(num_classes=num_classes, backbone=101, inputs=inputs, weights=weights, skip_mismatch=skip_mismatch, **kwargs)
+def resnet50_retinanet(num_classes, inputs=None, **kwargs):
+    return resnet_retinanet(num_classes=num_classes, backbone=50, inputs=inputs, **kwargs)
 
 
-def resnet152_retinanet(num_classes, inputs=None, weights='imagenet', skip_mismatch=True, **kwargs):
-    return resnet_retinanet(num_classes=num_classes, backbone=152, inputs=inputs, weights=weights, skip_mismatch=skip_mismatch, **kwargs)
+def resnet101_retinanet(num_classes, inputs=None, **kwargs):
+    return resnet_retinanet(num_classes=num_classes, backbone=101, inputs=inputs, **kwargs)
 
 
-def ResNet50RetinaNet(inputs, num_classes, skip_mismatch=True, **kwargs):
-    warnings.warn("ResNet50RetinaNet is replaced by resnet50_retinanet and will be removed in a future release.")
-    return resnet50_retinanet(num_classes, inputs, *args, skip_mismatch=skip_mismatch, **kwargs)
-
-
-def ResNet101RetinaNet(inputs, num_classes, skip_mismatch=True, **kwargs):
-    warnings.warn("ResNet101RetinaNet is replaced by resnet101_retinanet and will be removed in a future release.")
-    return resnet101_retinanet(num_classes, inputs, *args, skip_mismatch=skip_mismatch, **kwargs)
-
-
-def ResNet152RetinaNet(inputs, num_classes, skip_mismatch=True, **kwargs):
-    warnings.warn("ResNet152RetinaNet is replaced by resnet152_retinanet and will be removed in a future release.")
-    return resnet152_retinanet(num_classes, inputs, *args, skip_mismatch=skip_mismatch, **kwargs)
+def resnet152_retinanet(num_classes, inputs=None, **kwargs):
+    return resnet_retinanet(num_classes=num_classes, backbone=152, inputs=inputs, **kwargs)

@@ -39,7 +39,7 @@ from ..callbacks import RedirectModel
 from ..callbacks.eval import Evaluate
 from ..preprocessing.pascal_voc import PascalVocGenerator
 from ..preprocessing.csv_generator import CSVGenerator
-from ..models.resnet import resnet18_retinanet, custom_objects
+from ..models.resnet import resnet_retinanet, custom_objects, download_imagenet
 from ..utils.transform import random_transform_generator
 from ..utils.keras_version import check_keras_version
 
@@ -50,14 +50,20 @@ def get_session():
     return tf.Session(config=config)
 
 
-def create_models(num_classes, weights='imagenet', multi_gpu=0, lr = 0.001, nms_threshold = 0.1):
+def model_with_weights(model, weights, skip_mismatch):
+    if weights is not None:
+        model.load_weights(weights, by_name=True, skip_mismatch=skip_mismatch)
+    return model
+
+
+def create_models(num_classes, weights, multi_gpu=0, lr=0.001, nms_threshold=0.1):
     # create "base" model (no NMS)
 
     # Keras recommends initialising a multi-gpu model on the CPU to ease weight sharing, and to prevent OOM errors.
     # optionally wrap in a parallel model
     if multi_gpu > 1:
         with tf.device('/cpu:0'):
-            model = resnet18_retinanet(num_classes, weights=weights, nms=False)
+            model = model_with_weights(resnet_retinanet(num_classes, backbone=18, nms=False), weights=weights, skip_mismatch=True)
         training_model = multi_gpu_model(model, gpus=multi_gpu)
 
         # append NMS for prediction only
@@ -67,7 +73,7 @@ def create_models(num_classes, weights='imagenet', multi_gpu=0, lr = 0.001, nms_
         detections       = layers.NonMaximumSuppression(name='nms', nms_threshold=nms_threshold)([boxes, classification, detections])
         prediction_model = keras.models.Model(inputs=model.inputs, outputs=model.outputs[:2] + [detections])
     else:
-        model            = resnet18_retinanet(num_classes, weights=weights, nms=True)
+        model            = model_with_weights(resnet_retinanet(num_classes, backbone=18, nms=True), weights=weights, skip_mismatch=True)
         training_model   = model
         prediction_model = model
 
@@ -111,8 +117,16 @@ def create_callbacks(model, training_model, prediction_model, validation_generat
         evaluation = RedirectModel(evaluation, prediction_model)
         callbacks.append(evaluation)
 
-    lr_scheduler = keras.callbacks.ReduceLROnPlateau(monitor='loss', factor=0.1, patience=2, verbose=1, mode='auto', epsilon=0.0001, cooldown=0, min_lr=0)
-    callbacks.append(lr_scheduler)
+    callbacks.append(keras.callbacks.ReduceLROnPlateau(
+        monitor  = 'loss',
+        factor   = 0.1,
+        patience = 2,
+        verbose  = 1,
+        mode     = 'auto',
+        epsilon  = 0.0001,
+        cooldown = 0,
+        min_lr   = 0
+    ))
 
     return callbacks
 
@@ -228,8 +242,10 @@ def parse_args(args):
     csv_parser.add_argument('--val-annotations', help='Path to CSV file containing annotations for validation (optional).')
 
     group = parser.add_mutually_exclusive_group()
-    group.add_argument('--weights',  help='Weights to use for initialization (defaults to \'imagenet\').', default='imagenet')
-    group.add_argument('--snapshot', help='Snapshot to resume training with.')
+    group.add_argument('--snapshot',          help='Resume training from a snapshot.')
+    group.add_argument('--imagenet-weights',  help='Initialize the model with pretrained imagenet weights. This is the default behaviour.', action='store_const', const=True, default=True)
+    group.add_argument('--weights',           help='Initialize the model with weights from a file.')
+    group.add_argument('--no-weights',        help='Don\'t initialize the model with any weights.', dest='imagenet_weights', action='store_const', const=False)
 
     parser.add_argument('--batch-size',    help='Size of the batches.', default=4, type=int)
     parser.add_argument('--gpu',           help='Id of the GPU to use (as reported by nvidia-smi).')
@@ -263,14 +279,19 @@ def main(args=None):
     train_generator, validation_generator = create_generators(args)
 
     # create the model
-    if args.snapshot:
+    if args.snapshot is not None:
         print('Loading model, this may take a second...')
         model            = keras.models.load_model(args.snapshot, custom_objects=custom_objects)
         training_model   = model
         prediction_model = model
     else:
+        weights = args.weights
+        # default to imagenet if nothing else is specified
+        if weights is None and args.imagenet_weights:
+            weights = download_imagenet(18)
+
         print('Creating model, this may take a second...')
-        model, training_model, prediction_model = create_models(num_classes=train_generator.num_classes(), weights=None if args.weights == 'None' else args.weights, multi_gpu=args.multi_gpu, lr=args.lr)
+        model, training_model, prediction_model = create_models(num_classes=train_generator.num_classes(), weights=weights, multi_gpu=args.multi_gpu, lr=args.lr)
 
     # print model summary
     print(model.summary())

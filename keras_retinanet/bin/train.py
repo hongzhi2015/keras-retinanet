@@ -133,7 +133,7 @@ def create_callbacks(model, training_model, prediction_model, validation_generat
         monitor='loss',
         min_delta=0.0001,
         patience=20,
-        verboase=1,
+        verbose=1,
         mode='auto')
     callbacks.append(early_stop)
 

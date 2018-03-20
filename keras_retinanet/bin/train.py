@@ -117,16 +117,25 @@ def create_callbacks(model, training_model, prediction_model, validation_generat
         evaluation = RedirectModel(evaluation, prediction_model)
         callbacks.append(evaluation)
 
-    callbacks.append(keras.callbacks.ReduceLROnPlateau(
+    reduce_lr = keras.callbacks.ReduceLROnPlateau(
         monitor  = 'loss',
         factor   = 0.1,
-        patience = 2,
+        patience = args.lr_patience,
         verbose  = 1,
         mode     = 'auto',
         epsilon  = 0.0001,
         cooldown = 0,
-        min_lr   = 0
-    ))
+        min_lr   = args.lr_min
+    )
+    callbacks.append(reduce_lr)
+
+    early_stop = keras.callbacks.EarlyStopping(
+        monitor='loss',
+        min_delta=0.0001,
+        patience=20,
+        verboase=1,
+        mode='auto')
+    callbacks.append(early_stop)
 
     return callbacks
 
@@ -226,7 +235,9 @@ def check_args(parsed_args):
 
 
 def parse_args(args):
-    parser     = argparse.ArgumentParser(description='Simple training script for training a RetinaNet network.')
+    parser = argparse.ArgumentParser(
+        description='Simple training script for training a RetinaNet network.',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     subparsers = parser.add_subparsers(help='Arguments for specific dataset types.', dest='dataset_type')
     subparsers.required = True
 
@@ -256,7 +267,11 @@ def parse_args(args):
     parser.add_argument('--no-snapshots',  help='Disable saving snapshots.', dest='snapshots', action='store_false')
     parser.add_argument('--no-evaluation', help='Disable per epoch evaluation.', dest='evaluation', action='store_false')
     parser.add_argument('--image_dir', help='wher images are.', required=True)
-    parser.add_argument('--lr', help='learning rate', default = 0.001, type=float)
+
+    group = parser.add_argument_group('Learning Rate Control')
+    group.add_argument('--lr', help='Initial learning rate', default=1e-3, type=float)
+    group.add_argument('--lr-patience', help='Learning rate reduction patience (number of epochs)', default=5, type=int)
+    group.add_argument('--lr-min', help='Minimum learning rate', default=1e-8, type=float)
 
     return check_args(parser.parse_args(args))
 

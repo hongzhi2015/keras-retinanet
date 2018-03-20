@@ -40,8 +40,8 @@ def draw_caption(image, box, caption):
         caption : String containing the text to draw.
     """
     b = np.array(box).astype(int)
-    cv2.putText(image, caption, (b[0], b[1] - 10), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), 2)
-    cv2.putText(image, caption, (b[0], b[1] - 10), cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 1)
+    cv2.putText(image, caption, (b[0], b[1] - 10), cv2.FONT_HERSHEY_PLAIN, 1, (0, 0, 0), 5)
+    cv2.putText(image, caption, (b[0], b[1] - 10), cv2.FONT_HERSHEY_PLAIN, 1, (255, 255, 255), 2)
 
 
 def draw_boxes(image, boxes, color, thickness=2):
@@ -76,7 +76,34 @@ def draw_detections(image, detections, color=(255, 0, 0), generator=None):
         draw_caption(image, d, caption)
 
 
-def draw_annotations(image, annotations, color=(0, 255, 0), generator=None):
+def draw_detections_hl(image, detections, color=(255, 0, 0), hl_thresh=0.36, hl_color=(0, 0, 255), generator=None,
+                       draw_label=True):
+    """ Draws detections with in an image.
+
+    # Arguments
+        image      : The image to draw on.
+        detections : A [N, 4 + num_classes] matrix (x1, y1, x2, y2, cls_1, cls_2, ...).
+        color      : The color of the boxes.
+        generator  : (optional) Generator which can map label to class name.
+        draw_label : draw label or not
+    """
+    # draw boxes
+    for d in detections:
+        label   = np.argmax(d[4:])
+        score   = d[4 + label]
+        c = hl_color if score > hl_thresh else color
+        draw_box(image, d, c)
+
+    # draw labels
+    for d in detections:
+        label   = np.argmax(d[4:])
+        score   = d[4 + label]
+        caption = '{}: '.format(generator.label_to_name(label) if generator else label) if draw_label else ''
+        caption += '{0:.2f}'.format(score)
+        draw_caption(image, d, caption)
+
+
+def draw_annotations(image, annotations, color=(0, 255, 0), generator=None, draw_label=True):
     """ Draws annotations in an image.
 
     # Arguments
@@ -84,11 +111,13 @@ def draw_annotations(image, annotations, color=(0, 255, 0), generator=None):
         annotations : A [N, 5] matrix (x1, y1, x2, y2, label).
         color       : The color of the boxes.
         generator   : (optional) Generator which can map label to class name.
+        draw_label  : Draw label or not
     """
     draw_boxes(image, annotations, color)
 
     # draw labels
-    for b in annotations:
-        label   = b[4]
-        caption = '{}'.format(generator.label_to_name(label) if generator else label)
-        draw_caption(image, b, caption)
+    if draw_label:
+        for b in annotations:
+            label   = b[4]
+            caption = '{}'.format(generator.label_to_name(label) if generator else label)
+            draw_caption(image, b, caption)

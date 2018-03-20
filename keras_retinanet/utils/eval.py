@@ -17,7 +17,7 @@ limitations under the License.
 from __future__ import print_function
 
 from .anchors import compute_overlap
-from .visualization import draw_detections, draw_annotations
+from .visualization import draw_detections_hl, draw_annotations
 
 import numpy as np
 import os
@@ -55,7 +55,7 @@ def _compute_ap(recall, precision):
     return ap
 
 
-def _get_detections(generator, model, score_threshold=0.05, max_detections=100, save_path=None):
+def _get_detections(generator, model, score_threshold=0.05, hl_score_threshold=0.36, max_detections=100, save_path=None):
     """ Get the detections from the model using the generator.
 
     The result is a list of lists such that the size is:
@@ -65,6 +65,7 @@ def _get_detections(generator, model, score_threshold=0.05, max_detections=100, 
         generator       : The generator used to run images through the model.
         model           : The model to run on the images.
         score_threshold : The score confidence threshold to use.
+        hl_score_threshold: High-light detections whose scores are above this threshold.
         max_detections  : The maximum number of detections to use per image.
         save_path       : The path to save the images with visualized detections to.
     # Returns
@@ -108,8 +109,8 @@ def _get_detections(generator, model, score_threshold=0.05, max_detections=100, 
         image_predicted_labels = indices[1][scores_sort]
 
         if save_path is not None:
-            draw_annotations(raw_image, generator.load_annotations(i), generator=generator)
-            draw_detections(raw_image, detections[0, indices[0][scores_sort], :], generator=generator)
+            draw_annotations(raw_image, generator.load_annotations(i), generator=generator, draw_label=False)
+            draw_detections_hl(raw_image, detections[0, indices[0][scores_sort], :], generator=generator, draw_label=False)
 
             cv2.imwrite(os.path.join(save_path, '{}.png'.format(i)), raw_image)
 
@@ -153,6 +154,7 @@ def evaluate(
     model,
     iou_threshold=0.5,
     score_threshold=0.05,
+    hl_score_threshold=0.36,
     max_detections=100,
     save_path=None,
     diagnosis = False
@@ -164,13 +166,19 @@ def evaluate(
         model           : The model to evaluate.
         iou_threshold   : The threshold used to consider when a detection is positive or negative.
         score_threshold : The score confidence threshold to use for detections.
+        hl_score_threshold: When the score confidence of a detection is above this threshold,
+                            hight-light this detection in orange.
         max_detections  : The maximum number of detections to use per image.
         save_path       : The path to save images with visualized detections to.
     # Returns
         A dict mapping class names to mAP scores.
     """
     # gather all detections and annotations
-    all_detections     = _get_detections(generator, model, score_threshold=score_threshold, max_detections=max_detections, save_path=save_path)
+    all_detections     = _get_detections(generator, model,
+                                         score_threshold=score_threshold,
+                                         hl_score_threshold=hl_score_threshold,
+                                         max_detections=max_detections,
+                                         save_path=save_path)
     all_annotations    = _get_annotations(generator)
     average_precisions = {}
     recalls = {}

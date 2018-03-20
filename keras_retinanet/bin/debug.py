@@ -69,7 +69,10 @@ def create_generator(args):
         generator = CSVGenerator(
             args.annotations,
             args.classes,
-            transform_generator=transform_generator
+            # transform_generator=transform_generator
+            base_dir=args.image_dir,
+            image_min_side=960,
+            image_max_side=1280
         )
     else:
         raise ValueError('Invalid data type received: {}'.format(args.dataset_type))
@@ -99,6 +102,8 @@ def parse_args(args):
     parser.add_argument('--anchors', help='Show positive anchors on the image.', action='store_true')
     parser.add_argument('--annotations', help='Show annotations on the image. Green annotations have anchors, red annotations don\'t and therefore don\'t contribute to training.', action='store_true')
     parser.add_argument('--random-transform', help='Randomly transform image and annotations.', action='store_true')
+
+    parser.add_argument('--image-dir', help='where images are.', required=True)
 
     return parser.parse_args(args)
 

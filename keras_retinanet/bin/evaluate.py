@@ -33,7 +33,7 @@ if __name__ == "__main__" and __package__ is None:
 from ..preprocessing.pascal_voc import PascalVocGenerator
 from ..preprocessing.csv_generator import CSVGenerator
 from ..utils.keras_version import check_keras_version
-from ..utils.eval import evaluate
+from ..utils.eval import evaluate_diag
 from ..models.resnet import custom_objects
 
 
@@ -127,19 +127,17 @@ def main(args=None):
     model = keras.models.load_model(args.model, custom_objects=custom_objects)
 
     # print model summary
-    #print(model.summary())
+    # print(model.summary())
 
     # start evaluation
-    average_precisions, recalls, precisions, scores = evaluate(
+    average_precisions, recalls, precisions, scores = evaluate_diag(
         generator,
         model,
         iou_threshold=args.iou_threshold,
         score_threshold=args.score_threshold,
         hl_score_threshold=args.hl_score_threshold,
         max_detections=args.max_detections,
-        save_path=args.save_path,
-      diagnosis = True
-    )
+        save_path=args.save_path)
 
     # print evaluation
     for label, average_precision in average_precisions.items():
@@ -147,9 +145,13 @@ def main(args=None):
     print('mAP: {:.4f}'.format(sum(average_precisions.values()) / len(average_precisions)))
 
     if args.output_metrics is not None:
-      import pickle
-      dataset = {'average_precisions': average_precisions, 'recalls': recalls, 'precisions': precisions, 'scores': scores}
-      with open(args.output_metrics, 'wb') as handle:
-        pickle.dump(dataset, handle, protocol=2)
+        import pickle
+        dataset = {'average_precisions': average_precisions,
+                   'recalls': recalls,
+                   'precisions': precisions,
+                   'scores': scores}
+        with open(args.output_metrics, 'wb') as handle:
+            pickle.dump(dataset, handle, protocol=2)
+
 if __name__ == '__main__':
     main()

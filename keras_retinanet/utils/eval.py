@@ -364,17 +364,6 @@ class Diagnostic(object):
         for label in labels:
             lbl_det = self._flush_by_label(label)
             self._lbl_dets[label] = lbl_det
-            if True:
-                print()
-                print('############################')
-                print('NEW STATISTICS')
-                print('############################')
-                print('### label:', label)
-                print('### average precision:', lbl_det.average_precision)
-                print('### recalls:', lbl_det.recalls)
-                print('### precisions:', lbl_det.precisions)
-                print('### scores:', lbl_det.scores)
-                print()
         pass
 
     def _assert_freeze(self):
@@ -406,7 +395,7 @@ class Diagnostic(object):
         return sum(aps) / len(aps)
 
 
-def _collect_diag(
+def evaluate_diag(
     generator,
     model,
     iou_threshold=0.5,
@@ -415,8 +404,7 @@ def _collect_diag(
     max_detections=100,
     save_path=None
 ):
-    """
-    Collect diagnostic data from an evaluation set from given model.
+    """ Evaluate a given dataset using a given model with various diagnostic data dumped.
 
     # Arguments
         generator       : The generator that represents the dataset to evaluate.
@@ -427,7 +415,6 @@ def _collect_diag(
                             hight-light this detection in orange.
         max_detections  : The maximum number of detections to use per image.
         save_path       : The path to save images with visualized detections to.
-
     # Returns
         Diagnostic
     """
@@ -474,121 +461,3 @@ def _collect_diag(
 
     ret.freeze()
     return ret
-
-
-def evaluate_diag(
-    generator,
-    model,
-    iou_threshold=0.5,
-    score_threshold=0.05,
-    hl_score_threshold=0.36,
-    max_detections=100,
-    save_path=None
-):
-    """ Evaluate a given dataset using a given model with various diagnostic data dumped.
-
-    # Arguments
-        generator       : The generator that represents the dataset to evaluate.
-        model           : The model to evaluate.
-        iou_threshold   : The threshold used to consider when a detection is positive or negative.
-        score_threshold : The score confidence threshold to use for detections.
-        hl_score_threshold: When the score confidence of a detection is above this threshold,
-                            hight-light this detection in orange.
-        max_detections  : The maximum number of detections to use per image.
-        save_path       : The path to save images with visualized detections to.
-    # Returns
-        A dict mapping class names to mAP scores, when diagnosis is False.
-        [Diagnostic], when diagnosis is True.
-    """
-    diag = _collect_diag(
-        generator=generator,
-        model=model,
-        iou_threshold=iou_threshold,
-        score_threshold=score_threshold,
-        hl_score_threshold=hl_score_threshold,
-        max_detections=max_detections,
-        save_path=save_path)
-
-    # gather all detections and annotations
-    all_detections     = _get_detections(generator, model,
-                                         score_threshold=score_threshold,
-                                         hl_score_threshold=hl_score_threshold,
-                                         max_detections=max_detections,
-                                         save_path=save_path)
-    all_annotations    = _get_annotations(generator)
-    average_precisions = {}
-    recalls = {}
-    precisions = {}
-    return_scores = {}
-
-    # process detections and annotations
-    for label in range(generator.num_classes()):
-        false_positives = np.zeros((0,))
-        true_positives  = np.zeros((0,))
-        scores          = np.zeros((0,))
-        num_annotations = 0.0
-
-        for i in range(generator.size()):
-            detections           = all_detections[i][label]
-            annotations          = all_annotations[i][label]
-            num_annotations     += annotations.shape[0]
-            detected_annotations = []
-
-            for d in detections:
-                scores = np.append(scores, d[4])
-
-                if annotations.shape[0] == 0:
-                    false_positives = np.append(false_positives, 1)
-                    true_positives  = np.append(true_positives, 0)
-                    continue
-
-                overlaps            = compute_overlap(np.expand_dims(d, axis=0), annotations)
-                assigned_annotation = np.argmax(overlaps, axis=1)
-                max_overlap         = overlaps[0, assigned_annotation]
-
-                if max_overlap >= iou_threshold and assigned_annotation not in detected_annotations:
-                    false_positives = np.append(false_positives, 0)
-                    true_positives  = np.append(true_positives, 1)
-                    detected_annotations.append(assigned_annotation)
-                else:
-                    false_positives = np.append(false_positives, 1)
-                    true_positives  = np.append(true_positives, 0)
-
-        # no annotations -> AP for this class is 0 (is this correct?)
-        if num_annotations == 0:
-            average_precisions[label] = 0
-            continue
-
-        # sort by score
-        indices         = np.argsort(-scores)
-        false_positives = false_positives[indices]
-        true_positives  = true_positives[indices]
-
-        # compute false positives and true positives
-        false_positives = np.cumsum(false_positives)
-        true_positives  = np.cumsum(true_positives)
-
-        # compute recall and precision
-        recall    = true_positives / num_annotations
-        precision = true_positives / np.maximum(true_positives + false_positives, np.finfo(np.float64).eps)
-
-        # compute average precision
-        average_precision  = _compute_ap(recall, precision)
-        average_precisions[label] = average_precision
-        recalls[label] = recall
-        precisions[label] = precision
-        return_scores[label] = scores[indices]
-
-    if True:
-        print()
-        print('@@@@@@@@@@@@@@@@@@@@@')
-        print('Old statistics')
-        print('@@@@@@@@@@@@@@@@@@@@@')
-        print('@@ average_precisions', average_precisions)
-        # print('@@ image_names', generator.image_names)
-        print('@@ recalls', recalls)
-        print('@@ precisions', precisions)
-        print('@@ scores', return_scores)
-        print()
-
-    return diag

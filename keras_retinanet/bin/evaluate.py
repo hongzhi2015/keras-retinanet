@@ -19,6 +19,7 @@ limitations under the License.
 import argparse
 import os
 import sys
+import pickle
 
 import keras
 import tensorflow as tf
@@ -130,7 +131,7 @@ def main(args=None):
     # print(model.summary())
 
     # start evaluation
-    average_precisions, recalls, precisions, scores = evaluate_diag(
+    diag = evaluate_diag(
         generator,
         model,
         iou_threshold=args.iou_threshold,
@@ -140,18 +141,19 @@ def main(args=None):
         save_path=args.save_path)
 
     # print evaluation
-    for label, average_precision in average_precisions.items():
-        print(generator.label_to_name(label), '{:.4f}'.format(average_precision))
-    print('mAP: {:.4f}'.format(sum(average_precisions.values()) / len(average_precisions)))
+    ave_precs = []
+    for label in diag.get_labels():
+        lbl_det = diag.get_label_detection(label)
+        this_ave_prec = lbl_det.average_precision
+        ave_precs.append(this_ave_prec)
+        print(generator.label_to_name(label), '{:.4f}'.format(this_ave_prec))
+
+    print('mAP: {:.4f}'.format(sum(ave_precs) / len(ave_precs)))
 
     if args.output_metrics is not None:
-        import pickle
-        dataset = {'average_precisions': average_precisions,
-                   'recalls': recalls,
-                   'precisions': precisions,
-                   'scores': scores}
         with open(args.output_metrics, 'wb') as handle:
-            pickle.dump(dataset, handle, protocol=2)
+            pickle.dump(diag, handle, protocol=4)
+
 
 if __name__ == '__main__':
     main()

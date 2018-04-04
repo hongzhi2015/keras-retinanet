@@ -255,20 +255,24 @@ def evaluate(
         return average_precisions
 
 
+# Detection from an image
+# Note: Put it just under the module for pickling purpose
+ImageDetection = namedtuple('ImageDetection', [
+    'annotations',
+    'true_positives',
+    'false_positives'])
+
+
+# Aggregated detections of a label
+# Note: Put it just under the module for pickling purpose
+LabelDetection = namedtuple('LabelDetection', [
+    'average_precision',
+    'recalls',
+    'precisions',
+    'scores'])
+
+
 class Diagnostic(object):
-    # Detection from an image
-    ImageDetection = namedtuple('_ImageDetection', [
-        'annotations',
-        'true_positives',
-        'false_positives'])
-
-    # Aggregated detections of a label
-    LabelDetection = namedtuple('_LabelDetection', [
-        'average_precision',
-        'recalls',
-        'precisions',
-        'scores'])
-
     def __init__(self):
         # {image path: {label: ImageDetection}}
         self._img_dets = OrderedDict()
@@ -286,7 +290,7 @@ class Diagnostic(object):
             self._img_dets[img_path] = OrderedDict()
 
         assert label not in self._img_dets[img_path]
-        self._img_dets[img_path][label] = self.ImageDetection(
+        self._img_dets[img_path][label] = ImageDetection(
             annotations=annotations,
             true_positives=true_positives,
             false_positives=false_positives)
@@ -336,7 +340,7 @@ class Diagnostic(object):
         # compute average precision
         ave_precision = _compute_ap(recalls, precisions)
 
-        return self.LabelDetection(
+        return LabelDetection(
             average_precision=ave_precision,
             recalls=recalls,
             precisions=precisions,
@@ -373,8 +377,28 @@ class Diagnostic(object):
                 print()
         pass
 
+    def _assert_freeze(self):
+        """
+        Assert when freeze has not been called.
+        """
+        assert self._lbl_dets is not None, 'Call freeze() to collect label aggregated data'
 
-def _collect_diags(
+    def get_labels(self):
+        """
+        Return labels in [label]
+        """
+        self._assert_freeze()
+        return list(self._lbl_dets.keys())
+
+    def get_label_detection(self, label):
+        """
+        Return LabelDetection instance with given label.
+        """
+        self._assert_freeze()
+        return self._lbl_dets[label]
+
+
+def _collect_diag(
     generator,
     model,
     iou_threshold=0.5,
@@ -468,7 +492,7 @@ def evaluate_diag(
         A dict mapping class names to mAP scores, when diagnosis is False.
         [Diagnostic], when diagnosis is True.
     """
-    xx = _collect_diags(
+    diag = _collect_diag(
         generator=generator,
         model=model,
         iou_threshold=iou_threshold,
@@ -558,4 +582,5 @@ def evaluate_diag(
         print('@@ precisions', precisions)
         print('@@ scores', return_scores)
         print()
-    return average_precisions, generator.image_names, recalls, precisions, return_scores
+
+    return diag

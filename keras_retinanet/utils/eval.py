@@ -397,6 +397,14 @@ class Diagnostic(object):
         self._assert_freeze()
         return self._lbl_dets[label]
 
+    def get_mAP(self):
+        """
+        Return Mean Average Precision of all detections.
+        """
+        self._assert_freeze()
+        aps = [d.average_precision for d in self._lbl_dets.values()]
+        return sum(aps) / len(aps)
+
 
 def _collect_diag(
     generator,

@@ -115,6 +115,30 @@ class Generator(object):
         return [self.load_image(image_index) for image_index in group]
 
     def random_transform_group_entry(self, image, annotations):
+        if False:
+            import cv2
+            import hashlib
+            import os
+
+            def draw_image_and_annotations(img, anns):
+                canvas = img.copy()
+                canvas[..., 0] += 103.939
+                canvas[..., 1] += 116.779
+                canvas[..., 2] += 123.68
+                canvas = canvas.astype(np.uint8)
+                for ann in anns:
+                    x0, y0, x1, y1 = ann[:4].astype(np.int)
+                    cv2.rectangle(canvas, (x0, y0), (x1, y1), (0, 255, 0), thickness=3)
+
+                return canvas
+
+            CHECK_DIR = './transformed'
+            os.makedirs(CHECK_DIR, exist_ok=True)
+
+            NAME = hashlib.md5(image).hexdigest() + '.jpg'
+            CHECK_PATH = os.path.join(CHECK_DIR, NAME)
+            LEFT_IMG = draw_image_and_annotations(image, annotations)
+
         # randomly transform both image and annotations
         if self.transform_generator:
             transform = adjust_transform_for_image(next(self.transform_generator), image, self.transform_parameters.relative_translation)
@@ -124,6 +148,11 @@ class Generator(object):
             annotations = annotations.copy()
             for index in range(annotations.shape[0]):
                 annotations[index, :4] = transform_aabb(transform, annotations[index, :4])
+
+        if False:
+            RIGHT_IMG = draw_image_and_annotations(image, annotations)
+            WHOLE = np.hstack((LEFT_IMG, RIGHT_IMG))
+            cv2.imwrite(CHECK_PATH, WHOLE)
 
         return image, annotations
 

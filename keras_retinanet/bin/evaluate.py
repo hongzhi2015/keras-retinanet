@@ -151,6 +151,8 @@ def main(args=None):
     print('mAP: {:.4f}'.format(sum(ave_precs) / len(ave_precs)))
 
     if args.output_metrics is not None:
+        # In case, the dir of output metrics dir does not exist.
+        os.makedirs(os.dirname(args.output_metrics), exist_ok=True)
         with open(args.output_metrics, 'wb') as handle:
             pickle.dump(diag, handle, protocol=4)
 

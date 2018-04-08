@@ -7,6 +7,15 @@ from ..eval import Diagnostic, ImageDetection
 
 def plot_diag_detail(image_root, diag, out_dir):
     details_dir = os.path.join(out_dir, 'details')
+    os.makedirs(details_dir, exist_ok=True)
+    _plot_details(image_root, diag, details_dir)
+
+
+def _plot_details(image_root, diag, details_dir):
+    """
+    Return [(output path,  {label: ImageDetection})]
+    """
+    ret = []
     for img_path in diag.iter_image_paths():
         lbl2det = diag.get_image_detection(img_path)
         img_real_path = os.path.join(image_root, img_path)
@@ -18,6 +27,9 @@ def plot_diag_detail(image_root, diag, out_dir):
             os.makedirs(out_dir)
 
         cv2.imwrite(out_path, detail_img)
+        ret.append((out_path, lbl2det))
+
+    return ret
 
 
 def _plot_detection(img_real_path, lbl2det):

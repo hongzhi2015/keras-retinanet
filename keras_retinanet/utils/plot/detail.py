@@ -1,19 +1,38 @@
 import os
+import math
 import numpy as np
 import cv2
+from collections import namedtuple
 
 from ..eval import Diagnostic, ImageDetection
 
 
 def plot_diag_detail(image_root, diag, out_dir):
+    # Dump details
     details_dir = os.path.join(out_dir, 'details')
     os.makedirs(details_dir, exist_ok=True)
-    _plot_details(image_root, diag, details_dir)
+
+    dtl_img_path_lbl2det = _plot_details(image_root, diag, details_dir)
+    dtl_img_path_negcnt_lst = _get_img_neg_cnts(dtl_img_path_lbl2det)
+
+    # Dump false positives
+    fp_dir = os.path.join(out_dir, 'falsepositives')
+    os.makedirs(fp_dir, exist_ok=True)
+
+    sorted_by_fp = sorted(dtl_img_path_negcnt_lst, key=lambda x: -x[1].fp_cnt)
+    index_max = len(sorted_by_fp)
+    index_len_max = int(math.floor(math.log10(index_max)) + 1)
+    filename_fmt = '{{:0{}}}_fp_{{}}{{}}'.format(index_len_max)
+
+    for i, (dtl_img_path, neg_cnt) in enumerate(sorted_by_fp, start=1):
+        _, ext = os.path.splitext(dtl_img_path)
+        ln_path = os.path.join(fp_dir, filename_fmt.format(i, neg_cnt.fp_cnt, ext))
+        os.symlink(os.path.relpath(dtl_img_path, start=fp_dir), ln_path)
 
 
 def _plot_details(image_root, diag, details_dir):
     """
-    Return [(output path,  {label: ImageDetection})]
+    Return [(output detail image path,  {label: ImageDetection})]
     """
     ret = []
     for img_path in diag.iter_image_paths():
@@ -66,3 +85,31 @@ def _plot_detection(img_real_path, lbl2det):
             cv2.rectangle(canvas, (int(x0), int(y0)), (int(x1), int(y1)), color=FALSE_POS_COLOR, thickness=OTHER_THICKNESS)
 
         return canvas
+
+
+# Negative counts of an image
+# fp_cnt        false positives count
+# fn_cnt        false negative count
+NegCnts = namedtuple('NegCnts', ['fp_cnt', 'fn_cnt'])
+
+
+def _get_img_neg_cnts(detail_img_path_lbl2det):
+    """
+    Return [(detail image path, NegCnts)]
+
+    img_path_lbl2det    [(detail image path, {label: ImageDetection})]
+    """
+    ret = []
+
+    for detail_img_path, lbl2det in detail_img_path_lbl2det:
+        fp_cnt = 0
+        fn_cnt = 0
+
+        for img_det in lbl2det.values():
+            assert isinstance(img_det, ImageDetection)
+            fp_cnt += len(img_det.false_positives)
+            # FIXME: No false negative yet
+
+        ret.append((detail_img_path, NegCnts(fp_cnt=fp_cnt, fn_cnt=fn_cnt)))
+
+    return ret

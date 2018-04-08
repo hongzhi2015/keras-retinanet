@@ -152,7 +152,7 @@ def main(args=None):
 
     if args.output_metrics is not None:
         # In case, the dir of output metrics dir does not exist.
-        os.makedirs(os.dirname(args.output_metrics), exist_ok=True)
+        os.makedirs(os.path.dirname(args.output_metrics), exist_ok=True)
         with open(args.output_metrics, 'wb') as handle:
             pickle.dump(diag, handle, protocol=4)
 

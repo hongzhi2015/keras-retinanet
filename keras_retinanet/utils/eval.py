@@ -281,16 +281,32 @@ class Diagnostic(object):
         # {label: LabelDetection}
         self._lbl_dets = None
 
-    def add(self, img_path, label, annotations, true_positives, false_positives):
+    def _assert_not_freeze(self):
+        """
+        Assert when freeze has been called.
+        """
+        assert self._lbl_dets is None, 'Do not do this operation after calling freeze()'
+
+    def _assert_freeze(self):
+        """
+        Assert when freeze has not been called.
+        """
+        assert self._lbl_dets is not None, 'Call freeze() to collect label aggregated data'
+
+    def add(self, ur_img_path, label, annotations, true_positives, false_positives):
         """
         Add detection result of a label of an image.
         But not all statstics are updated, call flush() to update statistics.
-        """
-        if img_path not in self._img_dets:
-            self._img_dets[img_path] = OrderedDict()
 
-        assert label not in self._img_dets[img_path]
-        self._img_dets[img_path][label] = ImageDetection(
+        ur_img_path     The image path under the image root dir.
+        """
+        self._assert_not_freeze()
+
+        if ur_img_path not in self._img_dets:
+            self._img_dets[ur_img_path] = OrderedDict()
+
+        assert label not in self._img_dets[ur_img_path]
+        self._img_dets[ur_img_path][label] = ImageDetection(
             annotations=annotations,
             true_positives=true_positives,
             false_positives=false_positives)
@@ -366,12 +382,9 @@ class Diagnostic(object):
             self._lbl_dets[label] = lbl_det
         pass
 
-    def _assert_freeze(self):
-        """
-        Assert when freeze has not been called.
-        """
-        assert self._lbl_dets is not None, 'Call freeze() to collect label aggregated data'
-
+    #########################
+    # High-level Statistics #
+    #########################
     def get_labels(self):
         """
         Return labels in [label]
@@ -393,6 +406,18 @@ class Diagnostic(object):
         self._assert_freeze()
         aps = [d.average_precision for d in self._lbl_dets.values()]
         return sum(aps) / len(aps)
+
+    #####################
+    # Detection Details #
+    #####################
+    def iter_image_paths(self):
+        return self._img_dets.keys()
+
+    def get_image_detection(self, img_path):
+        """
+        Return {label: ImageDetection} with given img_path.
+        """
+        return self._img_dets[img_path]
 
 
 def evaluate_diag(
@@ -453,7 +478,7 @@ def evaluate_diag(
                     false_positives.append(d)
 
             ret.add(
-                img_path=generator.image_path(i),
+                ur_img_path=os.path.relpath(generator.image_path(i), start=generator.base_dir),
                 label=label,
                 annotations=annotations,
                 true_positives=true_positives,

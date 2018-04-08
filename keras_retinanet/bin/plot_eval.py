@@ -12,11 +12,12 @@ if __name__ == "__main__" and __package__ is None:
     __package__ = "keras_retinanet.bin"
 
 # Change these to absolute imports if you copy this script outside the keras_retinanet package.
-from ..utils.plot import plot_diag
+from ..utils.plot import plot_diag_summ, plot_diag_detail
 
 
 def parse_args(args):
     ap = argparse.ArgumentParser(description='Plot P-R curve')
+    ap.add_argument('--image-dir', help='where images are.', required=True)
     ap.add_argument('-d', '--desc', required=False, default=None, help='Description of the curve')
     ap.add_argument('-m', '--metrics', required=True, help='Path to pickled metrics')
     ap.add_argument('-o', '--output-dir', required=True, help='Output directory path')
@@ -30,7 +31,9 @@ def main(args=None):
 
     with open(args.metrics, 'rb') as f:
         diag = pickle.load(f)
-    plot_diag(args.desc, diag, args.output_dir)
+
+    plot_diag_summ(args.desc, diag, args.output_dir)
+    plot_diag_detail(image_root=args.image_dir, diag=diag, out_dir=args.output_dir)
 
 
 if __name__ == '__main__':

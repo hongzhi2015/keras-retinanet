@@ -3,12 +3,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-from .eval import Diagnostic, LabelDetection
+from ..eval import Diagnostic, LabelDetection
 
 
-def plot_diag(desc, diag, out_dir):
+def plot_diag_summ(desc, diag, out_dir):
     """
-    Plot given Diagnostic instance.
+    Plot summary of given Diagnostic instance.
 
     desc    str     description of the Diagnostic
     diag    Diagnostic instance

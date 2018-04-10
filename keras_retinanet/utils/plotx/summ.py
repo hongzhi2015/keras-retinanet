@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-from ..eval import Diagnostic, LabelDetection
+from ..evalx import Diagnostic, LabelDetection
 
 
 def plot_diag_summ(desc, diag, out_dir):

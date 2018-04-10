@@ -56,7 +56,7 @@ def _compute_ap(recall, precision):
     return ap
 
 
-def _get_detections(generator, model, score_threshold=0.05, hl_score_threshold=0.36, max_detections=100, save_path=None):
+def _get_detections(generator, model, score_threshold=0.05, max_detections=100, save_path=None):
     """ Get the detections from the model using the generator.
 
     The result is a list of lists such that the size is:
@@ -66,7 +66,6 @@ def _get_detections(generator, model, score_threshold=0.05, hl_score_threshold=0
         generator       : The generator used to run images through the model.
         model           : The model to run on the images.
         score_threshold : The score confidence threshold to use.
-        hl_score_threshold: High-light detections whose scores are above this threshold.
         max_detections  : The maximum number of detections to use per image.
         save_path       : The path to save the images with visualized detections to.
     # Returns
@@ -112,7 +111,6 @@ def _get_detections(generator, model, score_threshold=0.05, hl_score_threshold=0
         if save_path is not None:
             draw_annotations(raw_image, generator.load_annotations(i), generator=generator, draw_label=False)
             draw_detections(raw_image, detections[0, indices[0][scores_sort], :], generator=generator, draw_label=False)
-
             cv2.imwrite(os.path.join(save_path, '{}.png'.format(i)), raw_image)
 
         # copy detections to all_detections
@@ -148,111 +146,6 @@ def _get_annotations(generator):
         print('{}/{}'.format(i, generator.size()), end='\r')
 
     return all_annotations
-
-
-def evaluate(
-    generator,
-    model,
-    iou_threshold=0.5,
-    score_threshold=0.05,
-    hl_score_threshold=0.36,
-    max_detections=100,
-    save_path=None,
-    diagnosis=False
-):
-    """ Evaluate a given dataset using a given model.
-
-    # Arguments
-        generator       : The generator that represents the dataset to evaluate.
-        model           : The model to evaluate.
-        iou_threshold   : The threshold used to consider when a detection is positive or negative.
-        score_threshold : The score confidence threshold to use for detections.
-        hl_score_threshold: When the score confidence of a detection is above this threshold,
-                            hight-light this detection in orange.
-        max_detections  : The maximum number of detections to use per image.
-        save_path       : The path to save images with visualized detections to.
-    # Returns
-        A dict mapping class names to mAP scores.
-    """
-    # gather all detections and annotations
-    all_detections     = _get_detections(generator, model,
-                                         score_threshold=score_threshold,
-                                         hl_score_threshold=hl_score_threshold,
-                                         max_detections=max_detections,
-                                         save_path=save_path)
-    all_annotations    = _get_annotations(generator)
-    average_precisions = {}
-    recalls = {}
-    precisions = {}
-    return_scores = {}
-
-    # all_detections = pickle.load(open('all_detections.pkl', 'rb'))
-    # all_annotations = pickle.load(open('all_annotations.pkl', 'rb'))
-    # pickle.dump(all_detections, open('all_detections.pkl', 'wb'))
-    # pickle.dump(all_annotations, open('all_annotations.pkl', 'wb'))
-
-    # process detections and annotations
-    for label in range(generator.num_classes()):
-        false_positives = np.zeros((0,))
-        true_positives  = np.zeros((0,))
-        scores          = np.zeros((0,))
-        num_annotations = 0.0
-
-        for i in range(generator.size()):
-            detections           = all_detections[i][label]
-            annotations          = all_annotations[i][label]
-            num_annotations     += annotations.shape[0]
-            detected_annotations = []
-
-            for d in detections:
-                scores = np.append(scores, d[4])
-
-                if annotations.shape[0] == 0:
-                    false_positives = np.append(false_positives, 1)
-                    true_positives  = np.append(true_positives, 0)
-                    continue
-
-                overlaps            = compute_overlap(np.expand_dims(d, axis=0), annotations)
-                assigned_annotation = np.argmax(overlaps, axis=1)
-                max_overlap         = overlaps[0, assigned_annotation]
-
-                if max_overlap >= iou_threshold and assigned_annotation not in detected_annotations:
-                    false_positives = np.append(false_positives, 0)
-                    true_positives  = np.append(true_positives, 1)
-                    detected_annotations.append(assigned_annotation)
-                else:
-                    false_positives = np.append(false_positives, 1)
-                    true_positives  = np.append(true_positives, 0)
-
-        # no annotations -> AP for this class is 0 (is this correct?)
-        if num_annotations == 0:
-            average_precisions[label] = 0
-            continue
-
-        # sort by score
-        indices         = np.argsort(-scores)
-        false_positives = false_positives[indices]
-        true_positives  = true_positives[indices]
-
-        # compute false positives and true positives
-        false_positives = np.cumsum(false_positives)
-        true_positives  = np.cumsum(true_positives)
-
-        # compute recall and precision
-        recall    = true_positives / num_annotations
-        precision = true_positives / np.maximum(true_positives + false_positives, np.finfo(np.float64).eps)
-
-        # compute average precision
-        average_precision  = _compute_ap(recall, precision)
-        average_precisions[label] = average_precision
-        recalls[label] = recall
-        precisions[label] = precision
-        return_scores[label] = scores[indices]
-
-    if diagnosis:
-        return average_precisions, recalls, precisions, return_scores
-    else:
-        return average_precisions
 
 
 # Detection from an image
@@ -434,12 +327,11 @@ class Diagnostic(object):
         return self._img_dets[img_path]
 
 
-def evaluate_diag(
+def evaluatex(
     generator,
     model,
     iou_threshold=0.5,
     score_threshold=0.05,
-    hl_score_threshold=0.36,
     max_detections=100,
     save_path=None
 ):
@@ -450,8 +342,6 @@ def evaluate_diag(
         model           : The model to evaluate.
         iou_threshold   : The threshold used to consider when a detection is positive or negative.
         score_threshold : The score confidence threshold to use for detections.
-        hl_score_threshold: When the score confidence of a detection is above this threshold,
-                            hight-light this detection in orange.
         max_detections  : The maximum number of detections to use per image.
         save_path       : The path to save images with visualized detections to.
     # Returns
@@ -462,7 +352,6 @@ def evaluate_diag(
     # gather all detections and annotations
     all_detections     = _get_detections(generator, model,
                                          score_threshold=score_threshold,
-                                         hl_score_threshold=hl_score_threshold,
                                          max_detections=max_detections,
                                          save_path=save_path)
     all_annotations    = _get_annotations(generator)

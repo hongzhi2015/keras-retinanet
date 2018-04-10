@@ -12,7 +12,7 @@ if __name__ == "__main__" and __package__ is None:
     __package__ = "keras_retinanet.bin"
 
 # Change these to absolute imports if you copy this script outside the keras_retinanet package.
-from ..utils.plot import plot_diag_summ, plot_diag_detail
+from ..utils.plotx import plot_diag_summ, plot_diag_detail
 
 
 def parse_args(args):

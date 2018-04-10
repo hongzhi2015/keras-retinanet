@@ -18,6 +18,10 @@ from ..utils.plotx import plot_diag_summ, plot_diag_detail
 def parse_args(args):
     ap = argparse.ArgumentParser(description='Plot P-R curve')
     ap.add_argument('--image-dir', help='where images are.', required=True)
+    parser.add_argument('--score-threshold', help='Threshold on score to filter detections with.',
+                        default=0.05, type=float)
+    parser.add_argument('--iou-threshold',   help='IoU Threshold to count for a positive detection.',
+                        default=0.5, type=float)
     ap.add_argument('-d', '--desc', required=False, default=None, help='Description of the curve')
     ap.add_argument('-m', '--metrics', required=True, help='Path to pickled metrics')
     ap.add_argument('-o', '--output-dir', required=True, help='Output directory path')

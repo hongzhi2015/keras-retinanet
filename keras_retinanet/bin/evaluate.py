@@ -91,12 +91,15 @@ def parse_args(args):
 
     parser.add_argument('model',             help='Path to RetinaNet model.')
     parser.add_argument('--gpu',             help='Id of the GPU to use (as reported by nvidia-smi).')
-    parser.add_argument('--score-threshold', help='Threshold on score to filter detections with (defaults to 0.05).', default=0.05, type=float)
-    parser.add_argument('--iou-threshold',   help='IoU Threshold to count for a positive detection (defaults to 0.5).', default=0.5, type=float)
-    parser.add_argument('--max-detections',  help='Max Detections per image (defaults to 100).', default=100, type=int)
+    parser.add_argument('--score-threshold', help='Threshold on score to filter detections with.',
+                        default=0.05, type=float)
+    parser.add_argument('--iou-threshold',   help='IoU Threshold to count for a positive detection.',
+                        default=0.5, type=float)
+    parser.add_argument('--max-detections',  help='Max Detections per image.',
+                        default=100, type=int)
     parser.add_argument('--save-path',       help='Path for saving images with detections.')
-    parser.add_argument('--image_dir', help='where images are.', required=True)
-    parser.add_argument('--output_metrics', help='save the precision recalls out')
+    parser.add_argument('--image_dir',       help='where images are.', required=True)
+    parser.add_argument('--output_metrics',  help='save the precision recalls out', required=True)
 
     return parser.parse_args(args)
 
@@ -130,7 +133,7 @@ def main(args=None):
     # print(model.summary())
 
     # start evaluation
-    diag = evaluatex(
+    raw_diag = evaluatex(
         generator,
         model,
         iou_threshold=args.iou_threshold,
@@ -139,20 +142,20 @@ def main(args=None):
         save_path=args.save_path)
 
     # print evaluation
-    ave_precs = []
-    for label in diag.get_labels():
-        lbl_det = diag.get_label_detection(label)
-        this_ave_prec = lbl_det.average_precision
-        ave_precs.append(this_ave_prec)
-        print(generator.label_to_name(label), '{:.4f}'.format(this_ave_prec))
+    # ave_precs = []
+    # for label in raw_diag.get_labels():
+    #     lbl_det = raw_diag.get_label_detection(label)
+    #     this_ave_prec = lbl_det.average_precision
+    #     ave_precs.append(this_ave_prec)
+    #     print(generator.label_to_name(label), '{:.4f}'.format(this_ave_prec))
 
-    print('mAP: {:.4f}'.format(sum(ave_precs) / len(ave_precs)))
+    # print('mAP: {:.4f}'.format(sum(ave_precs) / len(ave_precs)))
 
     if args.output_metrics is not None:
         # In case, the dir of output metrics dir does not exist.
         os.makedirs(os.path.dirname(args.output_metrics), exist_ok=True)
         with open(args.output_metrics, 'wb') as handle:
-            pickle.dump(diag, handle, protocol=4)
+            pickle.dump(raw_diag, handle, protocol=4)
 
 
 if __name__ == '__main__':

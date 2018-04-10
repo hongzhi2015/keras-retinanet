@@ -148,6 +148,13 @@ def _get_annotations(generator):
     return all_annotations
 
 
+class RawDetection(namedtuple('_RawDetection', ['annotations', 'bboxes'])):
+    """
+    Raw detections from the model.
+    """
+    __slots__ = ()
+
+
 # Detection from an image
 # Note: Put it just under the module for pickling purpose
 class ImageDetection(namedtuple('_ImageDetection', [
@@ -177,6 +184,46 @@ LabelDetection = namedtuple('LabelDetection', [
     'recalls',
     'precisions',
     'scores'])
+
+
+class RawDiagnostic(object):
+    def __init__(self):
+        # {image path: {label: RawDetection}}
+        self._dets = OrderedDict()
+
+    def add(self, ur_img_path, label, annotations, bboxes):
+        """
+        Add detection result of a label of an image.
+
+        ur_img_path     The image path under the image root dir.
+        """
+        if ur_img_path not in self._dets:
+            self._dets[ur_img_path] = OrderedDict()
+
+        assert label not in self._dets[ur_img_path]
+        self._dets[ur_img_path][label] = RawDetection(annotations=annotations, bboxes=bboxes)
+
+    def iter_image_paths(self):
+        return self._dets.keys()
+
+    def get_label_detections(self, img_path):
+        """
+        Return {label: RawDetection} with given img_path.
+        """
+        return self._dets[img_path]
+
+
+class CookedDiagnostic(object):
+    def __init__(self, raw_diag, iou_thresh, score_range):
+        """
+        raw_diag        RawDiagnostic instance
+        iou_thresh      float   IoU threshold
+        score_range     (min score in float, max score in float)
+        """
+        pass
+
+    # def
+    # pass
 
 
 class Diagnostic(object):
@@ -327,6 +374,71 @@ class Diagnostic(object):
         return self._img_dets[img_path]
 
 
+# def evaluatex(
+#     generator,
+#     model,
+#     iou_threshold=0.5,
+#     score_threshold=0.05,
+#     max_detections=100,
+#     save_path=None
+# ):
+#     """ Evaluate a given dataset using a given model with various diagnostic data dumped.
+#
+#     # Arguments
+#         generator       : The generator that represents the dataset to evaluate.
+#         model           : The model to evaluate.
+#         iou_threshold   : The threshold used to consider when a detection is positive or negative.
+#         score_threshold : The score confidence threshold to use for detections.
+#         max_detections  : The maximum number of detections to use per image.
+#         save_path       : The path to save images with visualized detections to.
+#     # Returns
+#         Diagnostic
+#     """
+#     ret = Diagnostic()
+#
+#     # gather all detections and annotations
+#     all_detections     = _get_detections(generator, model,
+#                                          score_threshold=score_threshold,
+#                                          max_detections=max_detections,
+#                                          save_path=save_path)
+#     all_annotations    = _get_annotations(generator)
+#
+#     for i in range(generator.size()):
+#         for label in range(generator.num_classes()):
+#             detections           = all_detections[i][label]
+#             annotations          = all_annotations[i][label]
+#
+#             detected_annotations = []
+#             true_positives  = []
+#             false_positives = []
+#
+#             for d in detections:
+#                 if annotations.shape[0] == 0:
+#                     false_positives.append(d)
+#                     continue
+#
+#                 overlaps            = compute_overlap(np.expand_dims(d, axis=0), annotations)
+#                 assigned_annotation = np.argmax(overlaps, axis=1)
+#                 max_overlap         = overlaps[0, assigned_annotation]
+#
+#                 if max_overlap >= iou_threshold and assigned_annotation not in detected_annotations:
+#                     true_positives.append(d)
+#                     detected_annotations.append(assigned_annotation)
+#                 else:
+#                     false_positives.append(d)
+#
+#             ret.add(
+#                 ur_img_path=os.path.relpath(generator.image_path(i), start=generator.base_dir),
+#                 label=label,
+#                 annotations=annotations,
+#                 true_positives=true_positives,
+#                 false_positives=false_positives)
+#
+#     ret.freeze()
+#     return ret
+
+
+
 def evaluatex(
     generator,
     model,
@@ -347,45 +459,24 @@ def evaluatex(
     # Returns
         Diagnostic
     """
-    ret = Diagnostic()
+    raw_diag = RawDiagnostic()
 
     # gather all detections and annotations
-    all_detections     = _get_detections(generator, model,
-                                         score_threshold=score_threshold,
-                                         max_detections=max_detections,
-                                         save_path=save_path)
-    all_annotations    = _get_annotations(generator)
+    all_detections  = _get_detections(generator, model,
+                                      score_threshold=score_threshold,
+                                      max_detections=max_detections,
+                                      save_path=save_path)
+    all_annotations = _get_annotations(generator)
 
     for i in range(generator.size()):
+        ur_img_path = os.path.relpath(generator.image_path(i), start=generator.base_dir)
+
         for label in range(generator.num_classes()):
-            detections           = all_detections[i][label]
-            annotations          = all_annotations[i][label]
+            bboxes = all_detections[i][label]
+            anns   = all_annotations[i][label]
+            raw_diag.add(ur_img_path=ur_img_path,
+                         label=label,
+                         annotations=anns,
+                         bboxes=bboxes)
 
-            detected_annotations = []
-            true_positives  = []
-            false_positives = []
-
-            for d in detections:
-                if annotations.shape[0] == 0:
-                    false_positives.append(d)
-                    continue
-
-                overlaps            = compute_overlap(np.expand_dims(d, axis=0), annotations)
-                assigned_annotation = np.argmax(overlaps, axis=1)
-                max_overlap         = overlaps[0, assigned_annotation]
-
-                if max_overlap >= iou_threshold and assigned_annotation not in detected_annotations:
-                    true_positives.append(d)
-                    detected_annotations.append(assigned_annotation)
-                else:
-                    false_positives.append(d)
-
-            ret.add(
-                ur_img_path=os.path.relpath(generator.image_path(i), start=generator.base_dir),
-                label=label,
-                annotations=annotations,
-                true_positives=true_positives,
-                false_positives=false_positives)
-
-    ret.freeze()
-    return ret
+    return raw_diag

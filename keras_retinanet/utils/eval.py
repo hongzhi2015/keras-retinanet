@@ -257,10 +257,24 @@ def evaluate(
 
 # Detection from an image
 # Note: Put it just under the module for pickling purpose
-ImageDetection = namedtuple('ImageDetection', [
-    'annotations',
-    'true_positives',
-    'false_positives'])
+class ImageDetection(namedtuple('_ImageDetection', [
+        'annotations',
+        'true_positives',
+        'false_positives'])):
+
+    __slots__ = ()
+
+    def ge_min_score(self, min_score):
+        """
+        Return detections whose scores >= min_score
+        """
+        def bfilter(bboxes):
+            return [b for b in bboxes if b[4] >= min_score]
+
+        return ImageDetection(
+            annotations=self.annotations,
+            true_positives=bfilter(self.true_positives),
+            false_positives=bfilter(self.false_positives))
 
 
 # Aggregated detections of a label

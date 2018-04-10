@@ -21,6 +21,10 @@ def parse_args(args):
     ap.add_argument('-d', '--desc', required=False, default=None, help='Description of the curve')
     ap.add_argument('-m', '--metrics', required=True, help='Path to pickled metrics')
     ap.add_argument('-o', '--output-dir', required=True, help='Output directory path')
+
+    gp = ap.add_argument_group('Detail exposure options')
+    gp.add_argument('--min-score', required=True, default=0.0, type=float, help='Only keep bboxes whose scores >= this value')
+
     return ap.parse_args(args)
 
 
@@ -33,7 +37,7 @@ def main(args=None):
         diag = pickle.load(f)
 
     plot_diag_summ(args.desc, diag, args.output_dir)
-    plot_diag_detail(image_root=args.image_dir, diag=diag, out_dir=args.output_dir)
+    plot_diag_detail(image_root=args.image_dir, diag=diag, min_score=args.min_score, out_dir=args.output_dir)
 
 
 if __name__ == '__main__':

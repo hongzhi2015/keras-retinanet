@@ -7,12 +7,12 @@ from collections import namedtuple
 from ..eval import Diagnostic, ImageDetection
 
 
-def plot_diag_detail(image_root, diag, out_dir):
+def plot_diag_detail(image_root, diag, min_score, out_dir):
     # Dump details
     details_dir = os.path.join(out_dir, 'details')
     os.makedirs(details_dir, exist_ok=True)
 
-    dtl_img_path_lbl2det = _plot_details(image_root, diag, details_dir)
+    dtl_img_path_lbl2det = _plot_details(image_root, diag, min_score, details_dir)
     dtl_img_path_negcnt_lst = _get_img_neg_cnts(dtl_img_path_lbl2det)
 
     # Dump false positives
@@ -30,13 +30,16 @@ def plot_diag_detail(image_root, diag, out_dir):
         os.symlink(os.path.relpath(dtl_img_path, start=fp_dir), ln_path)
 
 
-def _plot_details(image_root, diag, details_dir):
+def _plot_details(image_root, diag, min_score, details_dir):
     """
     Return [(output detail image path,  {label: ImageDetection})]
     """
     ret = []
     for img_path in diag.iter_image_paths():
         lbl2det = diag.get_image_detection(img_path)
+        # replace detection by min_score
+        lbl2det = dict((lbl, det.ge_min_score(min_score))
+                       for lbl, det in lbl2det.items())
         img_real_path = os.path.join(image_root, img_path)
         detail_img = _plot_detection(img_real_path, lbl2det)
 

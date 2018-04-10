@@ -4,7 +4,7 @@ import numpy as np
 import cv2
 from collections import namedtuple
 
-from ..evalx import Diagnostic, ImageDetection
+from ..evalx import Diagnostic, CookedDetection
 
 
 def plot_diag_detail(image_root, diag, min_score, out_dir):

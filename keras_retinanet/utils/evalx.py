@@ -238,33 +238,78 @@ def _get_annotations(generator):
     return all_annotations
 
 
+###########################
+# Detection from an image #
+###########################
+
 class RawDetection(namedtuple('_RawDetection', ['annotations', 'bboxes'])):
     """
     Raw detections from the model.
     """
     __slots__ = ()
 
+    def __new__(cls, annotations, bboxes):
+        """
+        annotations   ndarray(shape=(N, 4))
+        bboxes        ndarray(shape=(K, 5)), 4 coordinates and one score that belongs to some category
+        """
+        assert len(annotations.shape) == 2 and annotations.shape[1] == 4
+        assert len(bboxes.shape) == 2 and bboxes.shape[1] == 5
+        return super().__new__(cls, annotations, bboxes)
 
-# Detection from an image
-# Note: Put it just under the module for pickling purpose
-class ImageDetection(namedtuple('_ImageDetection', [
-        'annotations',
+    def in_score_range(self, lb, ub):
+        """
+        Return RawDetection with scores of bboxes in [lb, ub].
+        Both boundaries are inclusive.
+        """
+        scores = self.bboxes[:, 4]
+        new_bboxes = self.bboxes[(lb <= scores) & (scores <= ub)]
+        return RawDetection(annotations=self.annotations, bboxes=new_bboxes)
+
+
+class CookedDetection(namedtuple('_CookedDetection', [
+        'raw',
         'true_positives',
         'false_positives'])):
 
     __slots__ = ()
 
-    def ge_min_score(self, min_score):
+    def __new__(cls, raw, iou_thresh, score_range):
         """
-        Return detections whose scores >= min_score
+        raw             RawDetection
+        iou_thresh      float   IoU threshold
+        score_range     (inclusive lower score in float, inclusive upper score in float)
         """
-        def bfilter(bboxes):
-            return [b for b in bboxes if b[4] >= min_score]
+        assert isinstance(raw, RawDetection)
+        raw = raw.in_score_range(*score_range)
+        tps, fps = cls._split_bboxes(raw, iou_thresh)
+        return super().__new__(cls, raw=raw, true_positives=tps, false_positives=fps)
 
-        return ImageDetection(
-            annotations=self.annotations,
-            true_positives=bfilter(self.true_positives),
-            false_positives=bfilter(self.false_positives))
+    @staticmethod
+    def _split_bboxes(raw, iou_thresh):
+        """
+        Return ([true positive bbox], [false positive bbox])
+        """
+        # FIXME: add false negative bboxes
+        tps = []
+        fps = []
+        detected_annotations = []
+
+        if raw.annotations.shape[0] == 0:
+            return tps, fps
+
+        for b in raw.bboxes:
+            overlaps = compute_overlap(np.expand_dims(b, axis=0), raw.annotations)
+            assigned_annotation = np.argmax(overlaps, axis=1)
+            max_overlap = overlaps[0, assigned_annotation]
+
+            if max_overlap >= iou_thresh and assigned_annotation not in detected_annotations:
+                tps.append(b)
+                detected_annotations.append(assigned_annotation)
+            else:
+                fps.append(b)
+
+        return tps, fps
 
 
 # Aggregated detections of a label
@@ -296,7 +341,7 @@ class RawDiagnostic(object):
     def iter_image_paths(self):
         return self._dets.keys()
 
-    def get_label_detections(self, img_path):
+    def get_label2detections(self, img_path):
         """
         Return {label: RawDetection} with given img_path.
         """
@@ -308,12 +353,136 @@ class CookedDiagnostic(object):
         """
         raw_diag        RawDiagnostic instance
         iou_thresh      float   IoU threshold
-        score_range     (min score in float, max score in float)
+        score_range     (inclusive lower score in float, inclusive upper score in float)
         """
+        assert isinstance(raw_diag, RawDiagnostic)
+
+        # {image path: {label: CookedDetection}}
+        self._dets = self._get_cooked_detections(raw_diag, iou_thresh, score_range)
+
+        # {label: LabelDetection}
+        self._lbl_dets = self._get_label_detections(self._dets)
         pass
 
-    # def
-    # pass
+    @staticmethod
+    def _get_cooked_detections(raw_diag, iou_thresh, score_range):
+        """
+        Return {image path: {label: CookedDetection}}
+        """
+        assert isinstance(raw_diag, RawDiagnostic)
+        ret = OrderedDict()
+        for img_path in raw_diag.iter_image_paths():
+            raw_lbl2dets = raw_diag.get_label2detections(img_path)
+            for lbl, raw_det in raw_lbl2dets.items():
+                cooked_det = CookedDetection(raw=raw_det, iou_thresh=iou_thresh, score_range=score_range)
+                assert img_path not in ret
+                if img_path not in ret:
+                    ret[img_path] = OrderedDict()
+
+                assert lbl not in ret[img_path]
+                ret[img_path][lbl] = cooked_det
+
+        return ret
+
+    @classmethod
+    def _get_label_detections(cls, dets):
+        """
+        Return {label: LabelDetection}
+
+        dets    {image path: {label: CookedDetection}}
+        """
+        ret = OrderedDict()
+
+        # Collect labels
+        labels = set()
+        for lbl2cdet in dets.values():
+            labels.update(lbl2cdet.keys())
+
+        labels = sorted(labels)
+
+        # Aggregate statistics
+        for label in labels:
+            lbl_det = cls._aggregate_by_label(dets, label)
+            ret[label] = lbl_det
+
+        return ret
+
+    @staticmethod
+    def _aggregate_by_label(dets, label):
+        """
+        Aggregate statistics by label.
+        Return LabelDetection.
+
+        dets    {image path: {label: CookedDetection}}
+        label   a label from dets
+        """
+        anns_cnt = 0
+        scores = []
+        tp_indicators = []
+        fp_indicators = []
+
+        for lbl2cdet in dets.values():
+            cdet = lbl2cdet[label]
+            anns_cnt += cdet.raw.annotations.shape[0]
+
+            for tp in cdet.true_positives:
+                scores.append(tp[4])
+                tp_indicators.append(True)
+                fp_indicators.append(False)
+
+            for fp in cdet.false_positives:
+                scores.append(fp[4])
+                tp_indicators.append(False)
+                fp_indicators.append(True)
+
+        # Convert to numpy array
+        scores = np.array(scores, dtype=np.float)
+        tp_indicators = np.array(tp_indicators, dtype=np.int)
+        fp_indicators = np.array(fp_indicators, dtype=np.int)
+
+        # sort by score
+        indices = np.argsort(-scores)
+        sorted_scores = scores[indices]
+        sorted_tp_indicators = tp_indicators[indices]
+        sorted_fp_indicators = fp_indicators[indices]
+
+        sorted_tp_cumsums = np.cumsum(sorted_tp_indicators)
+        sorted_fp_cumsums = np.cumsum(sorted_fp_indicators)
+
+        # compute recall and precision
+        recalls = sorted_tp_cumsums / float(anns_cnt)
+        precisions = sorted_tp_cumsums / np.maximum(sorted_tp_cumsums + sorted_fp_cumsums, np.finfo(np.float64).eps)
+
+        # compute average precision
+        ave_precision = _compute_ap(recalls, precisions)
+
+        return LabelDetection(
+            average_precision=ave_precision,
+            recalls=recalls,
+            precisions=precisions,
+            scores=sorted_scores)
+
+    #########################
+    # High-level Statistics #
+    #########################
+    def get_labels(self):
+        """
+        Return labels in [label]
+        """
+        return list(self._lbl_dets.keys())
+
+    def get_label_detection(self, label):
+        """
+        Return LabelDetection instance with given label.
+        """
+        return self._lbl_dets[label]
+
+    def get_mAP(self):
+        """
+        Return Mean Average Precision of all detections.
+        """
+        aps = [d.average_precision for d in self._lbl_dets.values()]
+        return sum(aps) / len(aps)
 
 
 class Diagnostic(object):

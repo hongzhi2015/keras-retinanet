@@ -156,13 +156,23 @@ def _get_detections(generator, model, max_detections=100, save_path=None):
         # correct boxes for image scale
         detections[0, :, :4] /= scale
 
+        if False:
+            print('### model detections:', detections.shape, detections.dtype)
+
         # select scores from detections
         scores = detections[0, :, 4:]
+
+        if False:
+            print('### model scores:', scores.shape, scores.dtype)
 
         # FIXME: REMOVE score_threshold
         score_threshold = 0.0
         # select indices which have a score above the threshold
         indices = np.where(detections[0, :, 4:] > score_threshold)
+
+        if False:
+            print('### detections[0, :, 4:]', detections[0, :, 4:].shape)
+            print('### score indices:', indices)
 
         # select those scores
         scores = scores[indices]
@@ -170,11 +180,23 @@ def _get_detections(generator, model, max_detections=100, save_path=None):
         # find the order with which to sort the scores
         scores_sort = np.argsort(-scores)[:max_detections]
 
+        if False:
+            print('### scores', scores.shape, scores.dtype)
+            print('### scores_sort', scores_sort.shape, scores_sort.dtype)
+            print('### indices[0]', indices[0].shape, indices[0].dtype)
+
         # select detections
         image_boxes      = detections[0, indices[0][scores_sort], :4]
         image_scores     = np.expand_dims(detections[0, indices[0][scores_sort], 4 + indices[1][scores_sort]], axis=1)
         image_detections = np.append(image_boxes, image_scores, axis=1)
         image_predicted_labels = indices[1][scores_sort]
+
+        if False:
+            print('### indices[1][scores_sort]', indices[1][scores_sort].shape, indices[1][scores_sort].dtype)
+            print('### image_bboxes', image_boxes.shape, image_boxes.dtype)
+            print('### image_scores', image_scores.shape, image_scores.dtype)
+            print('### image_detections', image_detections.shape, image_detections.dtype)
+            print('### image_predicted_labels', image_predicted_labels.shape, image_predicted_labels.dtype)
 
         if save_path is not None:
             draw_annotations(raw_image, generator.load_annotations(i), generator=generator, draw_label=False)
@@ -185,7 +207,7 @@ def _get_detections(generator, model, max_detections=100, save_path=None):
         for label in range(generator.num_classes()):
             all_detections[i][label] = image_detections[image_predicted_labels == label, :]
 
-        print('{}/{}'.format(i, generator.size()), end='\r')
+        print('{}/{}'.format(i + 1, generator.size()), end='\r')
 
     return all_detections
 

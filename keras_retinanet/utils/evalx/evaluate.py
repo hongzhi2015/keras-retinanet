@@ -250,9 +250,14 @@ class RawDetection(namedtuple('_RawDetection', ['annotations', 'bboxes'])):
 
 
 class CookedDetection(namedtuple('_CookedDetection', [
-        'raw',
-        'true_positives',
-        'false_positives'])):
+     # Raw Detection
+     'raw',
+     # [ndarray(x0, y0, x1, y1, score)]
+     'true_positives',
+     # [ndarray(x0, y0, x1, y1, score)]
+     'false_positives',
+     # [ndarray(x0, y0, x1, y1)]
+     'false_negatives'])):
 
     __slots__ = ()
 
@@ -264,34 +269,42 @@ class CookedDetection(namedtuple('_CookedDetection', [
         """
         assert isinstance(raw, RawDetection)
         raw = raw.in_score_range(*score_range)
-        tps, fps = cls._split_bboxes(raw, iou_thresh)
-        return super().__new__(cls, raw=raw, true_positives=tps, false_positives=fps)
+        tps, fps, fns = cls._split_bboxes(raw, iou_thresh)
+        return super().__new__(cls, raw=raw,
+                               true_positives=tps, false_positives=fps, false_negatives=fns)
 
     @staticmethod
     def _split_bboxes(raw, iou_thresh):
         """
-        Return ([true positive bbox], [false positive bbox])
+        Return ([true positive bbox], [false positive bbox], [false negative bbox])
         """
-        # FIXME: add false negative bboxes
         tps = []
         fps = []
-        detected_annotations = []
+        fns = []
+        detected_ann_idcs = []
 
         if raw.annotations.shape[0] == 0:
-            return tps, fps
+            return tps, fps, fns
 
+        # Get true positives and false positives
         for b in raw.bboxes:
             overlaps = compute_overlap(np.expand_dims(b, axis=0), raw.annotations)
-            assigned_annotation = np.argmax(overlaps, axis=1)
-            max_overlap = overlaps[0, assigned_annotation]
+            assigned_ann_idx = np.argmax(overlaps, axis=1)
+            max_overlap = overlaps[0, assigned_ann_idx]
 
-            if max_overlap >= iou_thresh and assigned_annotation not in detected_annotations:
+            assert iou_thresh > 0, 'the condition check requires iou_thresh be postitive'
+            if max_overlap >= iou_thresh and assigned_ann_idx not in detected_ann_idcs:
                 tps.append(b)
-                detected_annotations.append(assigned_annotation)
+                detected_ann_idcs.append(assigned_ann_idx)
             else:
                 fps.append(b)
 
-        return tps, fps
+        # Get false netatives
+        fns.extend(raw.annotations[i]
+                   for i in range(raw.annotations.shape[0])
+                   if i not in detected_ann_idcs)
+
+        return tps, fps, fns
 
 
 # Aggregated detections of a label

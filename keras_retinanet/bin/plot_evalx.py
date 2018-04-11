@@ -69,12 +69,12 @@ def main(args=None):
         cooked_diag = CookedDiagnostic(raw_diag=raw_diag,
                                        iou_thresh=args.iou_threshold,
                                        score_range=(args.score_threshold, 1.0))
-
         plot_diag_summ(args.desc, cooked_diag, args.output_dir)
     elif args.sub_cmd == 'detail':
-        # FIXME: FINISH THIS
-        assert False, 'IMPLEMENT THIS'
-        plot_diag_detail(image_root=args.image_dir, diag=diag, min_score=args.min_score, out_dir=args.output_dir)
+        cooked_diag = CookedDiagnostic(raw_diag=raw_diag,
+                                       iou_thresh=args.iou_threshold,
+                                       score_range=(args.score_threshold, 1.0))
+        plot_diag_detail(image_root=args.image_dir, cooked_diag=cooked_diag, out_dir=args.output_dir)
     else:
         assert False, 'Never be here'
 

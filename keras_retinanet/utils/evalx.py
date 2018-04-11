@@ -484,6 +484,18 @@ class CookedDiagnostic(object):
         aps = [d.average_precision for d in self._lbl_dets.values()]
         return sum(aps) / len(aps)
 
+    #####################
+    # Detection Details #
+    #####################
+    def iter_image_paths(self):
+        return self._dets.keys()
+
+    def get_image_detection(self, img_path):
+        """
+        Return {label: CookedDetection} with given img_path.
+        """
+        return self._dets[img_path]
+
 
 class Diagnostic(object):
     def __init__(self):

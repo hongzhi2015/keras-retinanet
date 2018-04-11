@@ -15,19 +15,44 @@ def plot_detail(image_root, cooked_diag, out_dir):
     dtl_img_path_lbl2det = _plot_details(image_root, cooked_diag, details_dir)
     dtl_img_path_negcnt_lst = _get_img_neg_cnts(dtl_img_path_lbl2det)
 
-    # Dump false positives
-    fp_dir = os.path.join(out_dir, 'falsepositives')
-    os.makedirs(fp_dir, exist_ok=True)
-
-    sorted_by_fp = sorted(dtl_img_path_negcnt_lst, key=lambda x: -x[1].fp_cnt)
-    index_max = len(sorted_by_fp)
+    # Sort and dump false positives and false negatives
+    index_max = len(dtl_img_path_negcnt_lst)
     index_len_max = int(math.floor(math.log10(index_max)) + 1)
-    filename_fmt = '{{:0{}}}_fp_{{}}{{}}'.format(index_len_max)
 
-    for i, (dtl_img_path, neg_cnt) in enumerate(sorted_by_fp, start=1):
+    fp_dir = os.path.join(out_dir, 'false_positives')
+    fn_dir = os.path.join(out_dir, 'false_negatives')
+
+    fp_prefix_fmt = '{{:0{}}}_fp_{{}}'.format(index_len_max)
+    fn_prefix_fmt = '{{:0{}}}_fn_{{}}'.format(index_len_max)
+
+    def fp_prefix_fn(i, negcnt): return fp_prefix_fmt.format(i, negcnt.fp_cnt)
+
+    def fn_prefix_fn(i, negcnt): return fn_prefix_fmt.format(i, negcnt.fn_cnt)
+
+    def fp_key_fn(dtl_img_path_negcnt): return -dtl_img_path_negcnt[1].fp_cnt
+
+    def fn_key_fn(dtl_img_path_negcnt): return -dtl_img_path_negcnt[1].fn_cnt
+
+    _dump_sorted_negcnt_lst(dtl_img_path_negcnt_lst, dst_dir=fp_dir, key_fn=fp_key_fn, prefix_fn=fp_prefix_fn)
+    _dump_sorted_negcnt_lst(dtl_img_path_negcnt_lst, dst_dir=fn_dir, key_fn=fn_key_fn, prefix_fn=fn_prefix_fn)
+
+
+def _dump_sorted_negcnt_lst(dtl_img_path_negcnt_lst, dst_dir, key_fn, prefix_fn):
+    """
+    Create sorted sym-links to the original detail image.
+
+    dtl_img_path_negcnt_lst     [(detail image path,  NegCnts)]
+    dst_dir                     destination directory
+    key_fn                      callable((detail image path, NegCnts)) used to sort dtl_img_path_negcnt_lst
+    prefix_fn                   callable(index, NegCnts) used to create the symlink prefix
+    """
+    os.makedirs(dst_dir, exist_ok=True)
+
+    sorted_lst = sorted(dtl_img_path_negcnt_lst, key=key_fn)
+    for i, (dtl_img_path, neg_cnt) in enumerate(sorted_lst, start=1):
         _, ext = os.path.splitext(dtl_img_path)
-        ln_path = os.path.join(fp_dir, filename_fmt.format(i, neg_cnt.fp_cnt, ext))
-        os.symlink(os.path.relpath(dtl_img_path, start=fp_dir), ln_path)
+        ln_path = os.path.join(dst_dir, prefix_fn(i, neg_cnt) + ext)
+        os.symlink(os.path.relpath(dtl_img_path, start=dst_dir), ln_path)
 
 
 def _plot_details(image_root, cooked_diag, details_dir):

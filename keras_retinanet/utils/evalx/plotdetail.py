@@ -1,13 +1,13 @@
 import os
 import math
-import numpy as np
 import cv2
 from collections import namedtuple
 
-from ..evalx import CookedDiagnostic, CookedDetection
+from .evaluate import CookedDiagnostic, CookedDetection
 
 
-def plot_diag_detail(image_root, cooked_diag, out_dir):
+def plot_detail(image_root, cooked_diag, out_dir):
+    assert isinstance(cooked_diag, CookedDiagnostic)
     # Dump details
     details_dir = os.path.join(out_dir, 'details')
     os.makedirs(details_dir, exist_ok=True)

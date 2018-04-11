@@ -12,8 +12,7 @@ if __name__ == "__main__" and __package__ is None:
     __package__ = "keras_retinanet.bin"
 
 # Change these to absolute imports if you copy this script outside the keras_retinanet package.
-from ..utils.evalx import CookedDiagnostic
-from ..utils.plotx import plot_diag_summ, plot_diag_detail
+from ..utils.evalx import CookedDiagnostic, plot_summ, plot_detail
 
 
 def parse_args(args):
@@ -69,12 +68,12 @@ def main(args=None):
         cooked_diag = CookedDiagnostic(raw_diag=raw_diag,
                                        iou_thresh=args.iou_threshold,
                                        score_range=(args.score_threshold, 1.0))
-        plot_diag_summ(args.desc, cooked_diag, args.output_dir)
+        plot_summ(args.desc, cooked_diag, args.output_dir)
     elif args.sub_cmd == 'detail':
         cooked_diag = CookedDiagnostic(raw_diag=raw_diag,
                                        iou_thresh=args.iou_threshold,
                                        score_range=(args.score_threshold, 1.0))
-        plot_diag_detail(image_root=args.image_dir, cooked_diag=cooked_diag, out_dir=args.output_dir)
+        plot_detail(image_root=args.image_dir, cooked_diag=cooked_diag, out_dir=args.output_dir)
     else:
         assert False, 'Never be here'
 

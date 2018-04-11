@@ -3,10 +3,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-from ..evalx import CookedDiagnostic, LabelDetection
+from .evaluate import CookedDiagnostic, LabelDetection
 
 
-def plot_diag_summ(desc, cooked_diag, out_dir):
+def plot_summ(desc, cooked_diag, out_dir):
     """
     Plot summary of given Diagnostic instance.
 

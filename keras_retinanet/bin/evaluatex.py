@@ -33,7 +33,7 @@ if __name__ == "__main__" and __package__ is None:
 # Change these to absolute imports if you copy this script outside the keras_retinanet package.
 from ..preprocessing.csv_generator import CSVGenerator
 from ..utils.keras_version import check_keras_version
-from ..utils.evalx import evaluatex
+from ..utils.evalx import evaluate
 from ..models.resnet import custom_objects
 
 
@@ -109,7 +109,7 @@ def main(args=None):
     # print(model.summary())
 
     # start evaluation
-    raw_diag = evaluatex(
+    raw_diag = evaluate(
         generator,
         model,
         max_detections=args.max_detections,

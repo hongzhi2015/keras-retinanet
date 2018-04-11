@@ -51,39 +51,45 @@ def _plot_details(image_root, cooked_diag, details_dir):
     return ret
 
 
-def _plot_detection(img_real_path, lbl2det):
+def _plot_detection(img_real_path, lbl2cdet):
     """
     Return an image.
 
     image_path  path to the image file
-    lbl2det     {label: CookedDetection}
+    lbl2cdet     {label: CookedDetection}
     """
     GND_TRUTH_COLOR = (0, 255, 0)
+    FALSE_NEG_COLOR = (255, 0, 0)
     TRUE_POS_COLOR  = (199, 199, 0)
     FALSE_POS_COLOR = (0, 0, 255)
-    FALSE_NEG_COLOR = (255, 0, 0)
 
     GND_TRUTH_THICKNESS = 5
     OTHER_THICKNESS = 2
 
     canvas = cv2.imread(img_real_path, cv2.IMREAD_COLOR)
 
-    for det in lbl2det.values():
-        # ground truth
-        for ann in det.raw.annotations:
-            x0, y0, x1, y1 = ann
-            cv2.rectangle(canvas, (int(x0), int(y0)), (int(x1), int(y1)), color=GND_TRUTH_COLOR, thickness=GND_TRUTH_THICKNESS)
+    def draw_xxyy_ary(ary, color, thickness):
+        for x0, y0, x1, y1 in ary:
+            x0, y0, x1, y1 = [int(z) for z in (x0, y0, x1, y1)]
+            cv2.rectangle(canvas, (x0, y0), (x1, y1), color=color, thickness=thickness)
 
-        # true positives
-        for tp in det.true_positives:
-            x0, y0, x1, y1 = tp[:4]
-            cv2.rectangle(canvas, (int(x0), int(y0)), (int(x1), int(y1)), color=TRUE_POS_COLOR, thickness=OTHER_THICKNESS)
+    def draw_xxyys_ary(ary, color, thickness):
+        # Draw bboxes first, in case score string is overlaid by bbox edges
+        for x0, y0, x1, y1, _ in ary:
+            x0, y0, x1, y1 = [int(z) for z in (x0, y0, x1, y1)]
+            cv2.rectangle(canvas, (x0, y0), (x1, y1), color=color, thickness=thickness)
 
-        # false positives
-        for fp in det.false_positives:
-            x0, y0, x1, y1 = fp[:4]
-            cv2.rectangle(canvas, (int(x0), int(y0)), (int(x1), int(y1)), color=FALSE_POS_COLOR, thickness=OTHER_THICKNESS)
+        for x0, y0, _, _, score in ary:
+            x0, y0 = [int(z) for z in (x0, y0)]
+            s = '{:.2f}'.format(score)
+            cv2.putText(canvas, s, (x0, y0 - 10), cv2.FONT_HERSHEY_PLAIN, 1.5, (0, 0, 0), 5)
+            cv2.putText(canvas, s, (x0, y0 - 10), cv2.FONT_HERSHEY_PLAIN, 1.5, (255, 255, 255), 2)
 
+    for cdet in lbl2cdet.values():
+        draw_xxyy_ary(cdet.raw.annotations, GND_TRUTH_COLOR, GND_TRUTH_THICKNESS)
+        draw_xxyy_ary(cdet.false_negatives, FALSE_NEG_COLOR, OTHER_THICKNESS)
+        draw_xxyys_ary(cdet.true_positives, TRUE_POS_COLOR, OTHER_THICKNESS)
+        draw_xxyys_ary(cdet.false_positives, FALSE_POS_COLOR, OTHER_THICKNESS)
         return canvas
 
 
@@ -108,7 +114,7 @@ def _get_img_neg_cnts(detail_img_path_lbl2cdet):
         for cdet in lbl2cdet.values():
             assert isinstance(cdet, CookedDetection)
             fp_cnt += len(cdet.false_positives)
-            # FIXME: No false negative yet
+            fn_cnt += len(cdet.false_negatives)
 
         ret.append((detail_img_path, NegCnts(fp_cnt=fp_cnt, fn_cnt=fn_cnt)))
 

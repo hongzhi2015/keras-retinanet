@@ -71,8 +71,6 @@ def parse_args(args):
 
     parser.add_argument('model',             help='Path to RetinaNet model.')
     parser.add_argument('--gpu',             help='Id of the GPU to use (as reported by nvidia-smi).')
-    parser.add_argument('--max-detections',  help='Max Detections per image.',
-                        default=100, type=int)
     parser.add_argument('--save-path',       help='Path for saving images with detections.')
     parser.add_argument('--image_dir',       help='where images are.', required=True)
     parser.add_argument('--output_metrics',  help='save the precision recalls out', required=True)
@@ -105,14 +103,10 @@ def main(args=None):
     print('Loading model, this may take a second...')
     model = keras.models.load_model(args.model, custom_objects=custom_objects)
 
-    # print model summary
-    # print(model.summary())
-
     # start evaluation
     raw_diag = evaluate(
         generator,
         model,
-        max_detections=args.max_detections,
         save_path=args.save_path)
 
     # print evaluation

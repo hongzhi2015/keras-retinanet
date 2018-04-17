@@ -104,6 +104,85 @@ def _compute_ap(recall, precision):
 #     return all_detections
 
 
+###################################################
+# Tried to trace how the original algorithm works #
+###################################################
+#
+# In [112]: detections
+# Out[112]:
+# array([[[ 1.  ,  2.  ,  3.  ,  4.  ,  0.3 ,  0.9 ],
+#         [ 3.  ,  4.  ,  5.  ,  6.  ,  0.4 ,  0.7 ],
+#         [ 7.  ,  8.  ,  9.  ,  0.  ,  0.5 ,  0.55]]])
+#
+# In [113]: scores = detections[0, :, 4:]
+#
+# In [114]: scores
+# Out[114]:
+# array([[ 0.3 ,  0.9 ],
+#        [ 0.4 ,  0.7 ],
+#        [ 0.5 ,  0.55]])
+#
+# In [128]: indices = np.where(scores > 0.35)
+#
+# In [129]: indices
+# Out[129]: (array([0, 1, 1, 2, 2]), array([1, 0, 1, 0, 1]))
+# COMMENT: The 1st array is for both detections and scores.
+#          The 2nd array is for the offset to the label0 score of each detection.
+#
+#
+# In [130]: scores = scores[indices]
+#
+# In [132]: scores
+# Out[132]: array([ 0.9 ,  0.4 ,  0.7 ,  0.5 ,  0.55])
+# COMMENT: Now each score in the scores corresponds to indices[0] or indices[1]
+#
+#
+# In [133]: scores_sort = np.argsort(-scores)
+# COMMENT: indices[0] and indices[1] are indirectly sorted by scores sort.
+#
+# In [134]: scores_sort
+# Out[134]: array([0, 2, 4, 3, 1])
+#
+#
+# In [135]: image_boxes      = detections[0, indices[0][scores_sort], :4]
+#
+# In [136]: image_boxes
+# Out[136]:
+# array([[ 1.,  2.,  3.,  4.],
+#        [ 3.,  4.,  5.,  6.],
+#        [ 7.,  8.,  9.,  0.],
+#        [ 7.,  8.,  9.,  0.],
+#        [ 3.,  4.,  5.,  6.]])
+#
+# In [139]: indices[0][scores_sort]
+# Out[139]: array([0, 1, 2, 2, 1])
+#
+# In [140]: image_scores     = np.expand_dims(detections[0, indices[0][scores_sort], 4 + indices[1][scores_sort]], axis=1)
+#
+# In [141]: image_scores
+# Out[141]:
+# array([[ 0.9 ],
+#        [ 0.7 ],
+#        [ 0.55],
+#        [ 0.5 ],
+#        [ 0.4 ]])
+#
+# In [142]: image_detections = np.append(image_boxes, image_scores, axis=1)
+#
+# In [144]: image_detections
+# Out[144]:
+# array([[ 1.  ,  2.  ,  3.  ,  4.  ,  0.9 ],
+#        [ 3.  ,  4.  ,  5.  ,  6.  ,  0.7 ],
+#        [ 7.  ,  8.  ,  9.  ,  0.  ,  0.55],
+#        [ 7.  ,  8.  ,  9.  ,  0.  ,  0.5 ],
+#        [ 3.  ,  4.  ,  5.  ,  6.  ,  0.4 ]])
+#
+#
+# In [145]: image_predicted_labels = indices[1][scores_sort]
+# In [146]: image_predicted_labels
+# Out[146]: array([1, 1, 1, 0, 0])
+
+
 def _get_detections(generator, model, max_detections=100, save_path=None):
     """ Get the detections from the model using the generator.
 
@@ -188,6 +267,182 @@ def _get_detections(generator, model, max_detections=100, save_path=None):
         # copy detections to all_detections
         for label in range(generator.num_classes()):
             all_detections[i][label] = image_detections[image_predicted_labels == label, :]
+
+        print('{}/{}'.format(i + 1, generator.size()), end='\r')
+
+    return all_detections
+
+
+class ModelDetections:
+    """
+    Hold detections from a model directly.
+    """
+
+    class EvalSample(namedtuple('_EvalSample', ['path', 'annotations', 'detections'])):
+        """
+        path            path of an image
+        annotations     ndarray(shape=(N, 5))
+                        N annotations
+                        each annotation is in [x0, y0, x1, y1, LABEL]
+        detections      ndarray(shape=(1, M, 4 + label number))
+                        M annotations
+                        each detection is in [x0, y0, x1, y1, score0, ... score_LAST]
+        """
+        __slots__ = ()
+
+        def __new__(cls, path, annotations, detections):
+            assert len(annotations.shape) == 2 and annotations.shape[-1] == 5
+            assert len(detections.shape) == 3
+            assert detections.shape[-1] > 4
+            return super().__new__(cls, path, annotations, detections)
+
+        def num_classes(self):
+            return self.detections.shape[-1] - 4
+
+    def __init__(self, num_classes):
+        """
+        num_classes     number of classes
+        """
+        self._num_classes = num_classes
+        # {under root image path: EvalSample}
+        self._ess = []
+        pass
+
+    def add(self, path, anns, dets):
+        """
+        Add raw detections for an image.
+
+        path    str         image path under root
+        anns    ndarray     annotations
+        dets    ndarray     raw detections from the model
+        """
+        es = self.EvalSample(path, anns, dets)
+        assert es.num_classes() == self._num_classes
+        self._ess.append(self.EvalSample(path, anns, dets))
+
+    def num_classes(self):
+        return self._num_classes
+
+    def get_all_detections(self, score_thresh):
+        """
+        Return OrderedDict {ur img path: [DETETIONS_FOR_A_LABEL]}
+        DETECTIONS_FOR_A_LABEL := numpy.ndarray(shape=(N detections, 5))
+        A label is the index of [DETETIONS_FOR_A_LABEL]
+
+        score_thresh    The score confidence threshold to use.
+        """
+        all_detections = OrderedDict()
+
+        for es in self._ess:
+            detections = es.detections
+
+            # select scores from detections
+            scores = detections[0, :, 4:]
+
+            # select indices which have a score above the threshold
+            indices = np.where(detections[0, :, 4:] > score_thresh)
+
+            # select those scores
+            scores = scores[indices]
+
+            # find the order with which to sort the scores
+            scores_sort = np.argsort(-scores)
+
+            # select detections
+            image_boxes      = detections[0, indices[0][scores_sort], :4]
+            image_scores     = np.expand_dims(detections[0, indices[0][scores_sort], 4 + indices[1][scores_sort]], axis=1)
+            image_detections = np.append(image_boxes, image_scores, axis=1)
+            image_predicted_labels = indices[1][scores_sort]
+
+            # copy detections to all_detections
+            all_detections[es.path] = [image_detections[image_predicted_labels == label, :]
+                                       for label in range(self._num_classes)]
+
+        return all_detections
+
+    def get_all_annotations(self):
+        """
+        Return OrderedDict {ur img path: [ANNOTATIONS_FOR_A_LABEL]}
+        ANNOTATIONS_FOR_A_LABEL := numpy.ndarray(shape=(N detections, 4))
+        A label is the index of [ANNOTATIONS_FOR_A_LABEL]
+        """
+        all_annotations = OrderedDict()
+
+        for es in self._ess:
+            annotations = es.annotations
+            all_annotations[es.path] = [annotations[annotations[:, 4] == label, :4].copy()
+                                        for label in range(self._num_classes)]
+
+        return all_annotations
+
+
+def _get_model_detections(generator, model):
+    """
+    Return ModelDetections instance.
+    """
+    ret = ModelDetections(generator.num_classes())
+    for i in range(generator.size()):
+        raw_image    = generator.load_image(i)
+        image        = generator.preprocess_image(raw_image.copy())
+        image, scale = generator.resize_image(image)
+
+        # run network
+        _, _, detections = model.predict_on_batch(np.expand_dims(image, axis=0))
+
+        # clip to image shape
+        detections[:, :, 0] = np.maximum(0, detections[:, :, 0])
+        detections[:, :, 1] = np.maximum(0, detections[:, :, 1])
+        detections[:, :, 2] = np.minimum(image.shape[1], detections[:, :, 2])
+        detections[:, :, 3] = np.minimum(image.shape[0], detections[:, :, 3])
+
+        # correct boxes for image scale
+        detections[0, :, :4] /= scale
+
+        annotations = generator.load_annotations(i)
+        ur_img_path = os.path.relpath(generator.image_path(i), start=generator.base_dir)
+        ret.add(ur_img_path, annotations, detections)
+
+        print('{}/{}'.format(i + 1, generator.size()), end='\r')
+
+    return ret
+
+
+def _get_all_detections(generator, model):
+    """ Get the all detections from the model using the generator.
+
+    The result is a list of lists such that the size is:
+        all_detections[num_images][num_classes] = detections[num_detections, 4 + num_classes]
+
+    # Arguments
+        generator       : The generator used to run images through the model.
+        model           : The model to run on the images.
+    """
+    all_detections = [[None for i in range(generator.num_classes())] for j in range(generator.size())]
+
+    for i in range(generator.size()):
+        raw_image    = generator.load_image(i)
+        image        = generator.preprocess_image(raw_image.copy())
+        image, scale = generator.resize_image(image)
+
+        # run network
+        _, _, detections = model.predict_on_batch(np.expand_dims(image, axis=0))
+
+        # clip to image shape
+        detections[:, :, 0] = np.maximum(0, detections[:, :, 0])
+        detections[:, :, 1] = np.maximum(0, detections[:, :, 1])
+        detections[:, :, 2] = np.minimum(image.shape[1], detections[:, :, 2])
+        detections[:, :, 3] = np.minimum(image.shape[0], detections[:, :, 3])
+
+        # correct boxes for image scale
+        detections[0, :, :4] /= scale
+
+        # select detections
+        bboxes = detections[0, :, :4]
+        scores = detections[0, :, 4:]
+
+        # copy detections to all_detections
+        for label in range(generator.num_classes()):
+            all_detections[i][label] = np.append(bboxes, scores[np.newaxis, :, label])
 
         print('{}/{}'.format(i + 1, generator.size()), end='\r')
 
@@ -341,6 +596,31 @@ class RawDiagnostic(object):
         Return {label: RawDetection} with given img_path.
         """
         return self._dets[img_path]
+
+
+def get_raw_diag(model_dets, score_thresh):
+    """
+    Return RawDiagnostic from ModelDetections instace.
+
+    model_dets  ModelDetections
+    """
+    ret = RawDiagnostic()
+
+    # gather all detections and annotations
+    all_detections  = model_dets.get_all_detections(score_thresh)
+    all_annotations = model_dets.get_all_annotations()
+    assert all_detections.keys() == all_annotations.keys()
+
+    for img_path in all_detections.keys():
+        for label in range(model_dets.num_classes()):
+            bboxes = all_detections[img_path][label]
+            anns = all_annotations[img_path][label]
+            ret.add(ur_img_path=img_path,
+                    label=label,
+                    annotations=anns,
+                    bboxes=bboxes)
+    return ret
+
 
 
 class CookedDiagnostic(object):
@@ -707,7 +987,6 @@ class Diagnostic(object):
 def evaluate(
     generator,
     model,
-    max_detections=100,
     save_path=None
 ):
     """ Evaluate a given dataset using a given model with various diagnostic data dumped.
@@ -715,18 +994,24 @@ def evaluate(
     # Arguments
         generator       : The generator that represents the dataset to evaluate.
         model           : The model to evaluate.
-        max_detections  : The maximum number of detections to use per image.
         save_path       : The path to save images with visualized detections to.
     # Returns
         Diagnostic
     """
+    return _get_model_detections(generator, model)
+
     raw_diag = RawDiagnostic()
 
     # gather all detections and annotations
-    all_detections  = _get_detections(generator, model,
-                                      max_detections=max_detections,
-                                      save_path=save_path)
+    all_detections  = _get_detections(generator, model, save_path=save_path)
     all_annotations = _get_annotations(generator)
+
+    if True:
+        print()
+        print('#### all detections', type(all_detections))
+        print('#### all_detections[0]', type(all_detections[0]))
+        print('#### all_detections[0][0]', type(all_detections[0][0]), all_detections[0][0].shape)
+        print()
 
     for i in range(generator.size()):
         ur_img_path = os.path.relpath(generator.image_path(i), start=generator.base_dir)

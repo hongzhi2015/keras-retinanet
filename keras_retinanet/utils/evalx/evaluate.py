@@ -273,7 +273,7 @@ def _get_detections(generator, model, max_detections=100, save_path=None):
     return all_detections
 
 
-class ModelDetections:
+class EvalDetections:
     """
     Hold detections from a model directly.
     """
@@ -322,6 +322,12 @@ class ModelDetections:
 
     def num_classes(self):
         return self._num_classes
+
+    def eval_samples(self):
+        """
+        Return [EvalSample]
+        """
+        return self._ess
 
     def get_all_detections(self, score_thresh):
         """
@@ -376,14 +382,14 @@ class ModelDetections:
         return all_annotations
 
 
-def get_model_detections(generator, model):
+def get_eval_detections(generator, model):
     """
-    Return ModelDetections instance from model directly.
+    Return EvalDetections instance from model directly.
 
     generator   generator that represents the dataset to evaluate
     model       model to evaluate
     """
-    ret = ModelDetections(generator.num_classes())
+    ret = EvalDetections(generator.num_classes())
     for i in range(generator.size()):
         raw_image    = generator.load_image(i)
         image        = generator.preprocess_image(raw_image.copy())
@@ -554,6 +560,42 @@ def get_raw_diag(model_dets, score_thresh):
                     label=label,
                     annotations=anns,
                     bboxes=bboxes)
+    return ret
+
+
+def get_raw_diag_II(eval_dets):
+    """
+    Return RawDiagnostic from ModelDetections instace.
+
+    model_dets  ModelDetections
+    """
+    ret = RawDiagnostic()
+
+    for es in eval_dets.eval_samples():
+        assert es.detections.shape[0] == 1
+        bboxes = es.detections[0, :, :4]
+        scores = es.detections[0, :, 4:]
+
+        if True:
+            print()
+            print('### annotations', es.annotations.shape)
+            print('### bboxes:', bboxes.shape)
+            print('### scores:', scores.shape)
+            print()
+
+        for label in range(es.num_classes()):
+            # ndarray([x0, y0, x1, y1, score])
+            this_label_bbox_scores = np.append(bboxes, scores[:, label, np.newaxis], axis=1)
+            # ndarray([x0, y0, x1, y1])
+            this_label_annotations = es.annotations[es.annotations[:, 4] == label, :4].copy()
+            if True:
+                print('### this_label_annotations', this_label_annotations)
+
+            ret.add(ur_img_path=es.path,
+                    label=label,
+                    annotations=this_label_annotations,
+                    bboxes=this_label_bbox_scores)
+
     return ret
 
 

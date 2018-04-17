@@ -33,7 +33,7 @@ if __name__ == "__main__" and __package__ is None:
 # Change these to absolute imports if you copy this script outside the keras_retinanet package.
 from ..preprocessing.csv_generator import CSVGenerator
 from ..utils.keras_version import check_keras_version
-from ..utils.evalx import evaluate
+from ..utils.evalx import get_eval_detections
 from ..models.resnet import custom_objects
 
 
@@ -104,10 +104,7 @@ def main(args=None):
     model = keras.models.load_model(args.model, custom_objects=custom_objects)
 
     # start evaluation
-    raw_diag = evaluate(
-        generator,
-        model,
-        save_path=args.save_path)
+    eval_dets = get_eval_detections(generator, model)
 
     # print evaluation
     # ave_precs = []
@@ -123,7 +120,7 @@ def main(args=None):
         # In case, the dir of output metrics dir does not exist.
         os.makedirs(os.path.dirname(args.output_metrics), exist_ok=True)
         with open(args.output_metrics, 'wb') as handle:
-            pickle.dump(raw_diag, handle, protocol=4)
+            pickle.dump(eval_dets, handle, protocol=4)
 
 
 if __name__ == '__main__':

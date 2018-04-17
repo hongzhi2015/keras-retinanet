@@ -513,6 +513,32 @@ LabelDetection = namedtuple('LabelDetection', [
 
 
 class RawDiagnostic(object):
+    @staticmethod
+    def from_eval_dets(eval_dets):
+        """
+        Return RawDiagnostic instance from EvalDetections instance.
+        """
+        assert isinstance(eval_dets, EvalDetections)
+
+        ret = RawDiagnostic()
+
+        for es in eval_dets.eval_samples():
+            assert es.detections.shape[0] == 1
+            bboxes = es.detections[0, :, :4]
+            scores = es.detections[0, :, 4:]
+
+            for label in range(es.num_classes()):
+                # ndarray([x0, y0, x1, y1, score])
+                this_label_bbox_scores = np.append(bboxes, scores[:, label, np.newaxis], axis=1)
+                # ndarray([x0, y0, x1, y1])
+                this_label_annotations = es.annotations[es.annotations[:, 4] == label, :4].copy()
+                ret.add(ur_img_path=es.path,
+                        label=label,
+                        annotations=this_label_annotations,
+                        bboxes=this_label_bbox_scores)
+
+        return ret
+
     def __init__(self):
         # {image path: {label: RawDetection}}
         self._dets = OrderedDict()
@@ -537,66 +563,6 @@ class RawDiagnostic(object):
         Return {label: RawDetection} with given img_path.
         """
         return self._dets[img_path]
-
-
-def get_raw_diag(model_dets, score_thresh):
-    """
-    Return RawDiagnostic from ModelDetections instace.
-
-    model_dets  ModelDetections
-    """
-    ret = RawDiagnostic()
-
-    # gather all detections and annotations
-    all_detections  = model_dets.get_all_detections(score_thresh)
-    all_annotations = model_dets.get_all_annotations()
-    assert all_detections.keys() == all_annotations.keys()
-
-    for img_path in all_detections.keys():
-        for label in range(model_dets.num_classes()):
-            bboxes = all_detections[img_path][label]
-            anns = all_annotations[img_path][label]
-            ret.add(ur_img_path=img_path,
-                    label=label,
-                    annotations=anns,
-                    bboxes=bboxes)
-    return ret
-
-
-def get_raw_diag_II(eval_dets):
-    """
-    Return RawDiagnostic from ModelDetections instace.
-
-    model_dets  ModelDetections
-    """
-    ret = RawDiagnostic()
-
-    for es in eval_dets.eval_samples():
-        assert es.detections.shape[0] == 1
-        bboxes = es.detections[0, :, :4]
-        scores = es.detections[0, :, 4:]
-
-        if True:
-            print()
-            print('### annotations', es.annotations.shape)
-            print('### bboxes:', bboxes.shape)
-            print('### scores:', scores.shape)
-            print()
-
-        for label in range(es.num_classes()):
-            # ndarray([x0, y0, x1, y1, score])
-            this_label_bbox_scores = np.append(bboxes, scores[:, label, np.newaxis], axis=1)
-            # ndarray([x0, y0, x1, y1])
-            this_label_annotations = es.annotations[es.annotations[:, 4] == label, :4].copy()
-            if True:
-                print('### this_label_annotations', this_label_annotations)
-
-            ret.add(ur_img_path=es.path,
-                    label=label,
-                    annotations=this_label_annotations,
-                    bboxes=this_label_bbox_scores)
-
-    return ret
 
 
 class CookedDiagnostic(object):

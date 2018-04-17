@@ -12,7 +12,7 @@ if __name__ == "__main__" and __package__ is None:
     __package__ = "keras_retinanet.bin"
 
 # Change these to absolute imports if you copy this script outside the keras_retinanet package.
-from ..utils.evalx import CookedDiagnostic, get_raw_diag, get_raw_diag_II, plot_summ, plot_detail
+from ..utils.evalx import RawDiagnostic, CookedDiagnostic, plot_summ, plot_detail
 
 
 def parse_args(args):
@@ -62,10 +62,10 @@ def main(args=None):
     args = parse_args(args)
 
     with open(args.metrics, 'rb') as f:
-        model_dets = pickle.load(f)
+        eval_dets = pickle.load(f)
 
-    raw_diag = get_raw_diag(model_dets, score_thresh=0.0)
-    raw_diag = get_raw_diag_II(model_dets)
+    raw_diag = RawDiagnostic.from_eval_dets(eval_dets)
+
     if args.sub_cmd == 'summary':
         cooked_diag = CookedDiagnostic(raw_diag=raw_diag,
                                        iou_thresh=args.iou_threshold,

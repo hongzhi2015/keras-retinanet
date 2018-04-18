@@ -76,7 +76,7 @@ def draw_detections(image, detections, color=(255, 0, 0), generator=None):
         draw_caption(image, d, caption)
 
 
-def draw_annotations(image, annotations, color=(0, 255, 0), generator=None, draw_label=True):
+def draw_annotations(image, annotations, color=(0, 255, 0), generator=None):
     """ Draws annotations in an image.
 
     # Arguments
@@ -84,13 +84,11 @@ def draw_annotations(image, annotations, color=(0, 255, 0), generator=None, draw
         annotations : A [N, 5] matrix (x1, y1, x2, y2, label).
         color       : The color of the boxes.
         generator   : (optional) Generator which can map label to class name.
-        draw_label  : Draw label or not
     """
     draw_boxes(image, annotations, color)
 
     # draw labels
-    if draw_label:
-        for b in annotations:
-            label   = b[4]
-            caption = '{}'.format(generator.label_to_name(label) if generator else label)
-            draw_caption(image, b, caption)
+    for b in annotations:
+        label   = b[4]
+        caption = '{}'.format(generator.label_to_name(label) if generator else label)
+        draw_caption(image, b, caption)

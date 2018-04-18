@@ -19,7 +19,6 @@ limitations under the License.
 import argparse
 import os
 import sys
-import pickle
 
 import keras
 import tensorflow as tf
@@ -34,7 +33,7 @@ if __name__ == "__main__" and __package__ is None:
 from ..preprocessing.pascal_voc import PascalVocGenerator
 from ..preprocessing.csv_generator import CSVGenerator
 from ..utils.keras_version import check_keras_version
-from ..utils.evalx import evaluatex
+from ..utils.eval import evaluate
 from ..models.resnet import custom_objects
 
 
@@ -62,9 +61,6 @@ def create_generator(args):
         validation_generator = CSVGenerator(
             args.annotations,
             args.classes,
-          base_dir = args.image_dir,
-              image_min_side=960,
-              image_max_side=1280,
         )
     else:
         raise ValueError('Invalid data type received: {}'.format(args.dataset_type))
@@ -98,8 +94,6 @@ def parse_args(args):
     parser.add_argument('--max-detections',  help='Max Detections per image.',
                         default=100, type=int)
     parser.add_argument('--save-path',       help='Path for saving images with detections.')
-    parser.add_argument('--image_dir',       help='where images are.', required=True)
-    parser.add_argument('--output_metrics',  help='save the precision recalls out', required=True)
 
     return parser.parse_args(args)
 
@@ -130,33 +124,22 @@ def main(args=None):
     model = keras.models.load_model(args.model, custom_objects=custom_objects)
 
     # print model summary
-    # print(model.summary())
+    print(model.summary())
 
     # start evaluation
-    raw_diag = evaluatex(
+    average_precisions = evaluate(
         generator,
         model,
         iou_threshold=args.iou_threshold,
         score_threshold=args.score_threshold,
         max_detections=args.max_detections,
-        save_path=args.save_path)
+        save_path=args.save_path
+    )
 
     # print evaluation
-    # ave_precs = []
-    # for label in raw_diag.get_labels():
-    #     lbl_det = raw_diag.get_label_detection(label)
-    #     this_ave_prec = lbl_det.average_precision
-    #     ave_precs.append(this_ave_prec)
-    #     print(generator.label_to_name(label), '{:.4f}'.format(this_ave_prec))
-
-    # print('mAP: {:.4f}'.format(sum(ave_precs) / len(ave_precs)))
-
-    if args.output_metrics is not None:
-        # In case, the dir of output metrics dir does not exist.
-        os.makedirs(os.path.dirname(args.output_metrics), exist_ok=True)
-        with open(args.output_metrics, 'wb') as handle:
-            pickle.dump(raw_diag, handle, protocol=4)
-
+    for label, average_precision in average_precisions.items():
+        print(generator.label_to_name(label), '{:.4f}'.format(average_precision))
+    print('mAP: {:.4f}'.format(sum(average_precisions.values()) / len(average_precisions)))
 
 if __name__ == '__main__':
     main()

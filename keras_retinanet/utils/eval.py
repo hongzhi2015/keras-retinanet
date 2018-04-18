@@ -19,12 +19,11 @@ from __future__ import print_function
 from .anchors import compute_overlap
 from .visualization import draw_detections, draw_annotations
 
-from collections import namedtuple, OrderedDict
 import numpy as np
 import os
 
 import cv2
-# import pickle
+import pickle
 
 
 def _compute_ap(recall, precision):
@@ -56,7 +55,7 @@ def _compute_ap(recall, precision):
     return ap
 
 
-def _get_detections(generator, model, score_threshold=0.05, hl_score_threshold=0.36, max_detections=100, save_path=None):
+def _get_detections(generator, model, score_threshold=0.05, max_detections=100, save_path=None):
     """ Get the detections from the model using the generator.
 
     The result is a list of lists such that the size is:
@@ -66,7 +65,6 @@ def _get_detections(generator, model, score_threshold=0.05, hl_score_threshold=0
         generator       : The generator used to run images through the model.
         model           : The model to run on the images.
         score_threshold : The score confidence threshold to use.
-        hl_score_threshold: High-light detections whose scores are above this threshold.
         max_detections  : The maximum number of detections to use per image.
         save_path       : The path to save the images with visualized detections to.
     # Returns
@@ -110,8 +108,8 @@ def _get_detections(generator, model, score_threshold=0.05, hl_score_threshold=0
         image_predicted_labels = indices[1][scores_sort]
 
         if save_path is not None:
-            draw_annotations(raw_image, generator.load_annotations(i), generator=generator, draw_label=False)
-            draw_detections(raw_image, detections[0, indices[0][scores_sort], :], generator=generator, draw_label=False)
+            draw_annotations(raw_image, generator.load_annotations(i), generator=generator)
+            draw_detections(raw_image, detections[0, indices[0][scores_sort], :], generator=generator)
 
             cv2.imwrite(os.path.join(save_path, '{}.png'.format(i)), raw_image)
 
@@ -155,10 +153,8 @@ def evaluate(
     model,
     iou_threshold=0.5,
     score_threshold=0.05,
-    hl_score_threshold=0.36,
     max_detections=100,
-    save_path=None,
-    diagnosis=False
+    save_path=None
 ):
     """ Evaluate a given dataset using a given model.
 
@@ -167,24 +163,15 @@ def evaluate(
         model           : The model to evaluate.
         iou_threshold   : The threshold used to consider when a detection is positive or negative.
         score_threshold : The score confidence threshold to use for detections.
-        hl_score_threshold: When the score confidence of a detection is above this threshold,
-                            hight-light this detection in orange.
         max_detections  : The maximum number of detections to use per image.
         save_path       : The path to save images with visualized detections to.
     # Returns
         A dict mapping class names to mAP scores.
     """
     # gather all detections and annotations
-    all_detections     = _get_detections(generator, model,
-                                         score_threshold=score_threshold,
-                                         hl_score_threshold=hl_score_threshold,
-                                         max_detections=max_detections,
-                                         save_path=save_path)
+    all_detections     = _get_detections(generator, model, score_threshold=score_threshold, max_detections=max_detections, save_path=save_path)
     all_annotations    = _get_annotations(generator)
     average_precisions = {}
-    recalls = {}
-    precisions = {}
-    return_scores = {}
 
     # all_detections = pickle.load(open('all_detections.pkl', 'rb'))
     # all_annotations = pickle.load(open('all_annotations.pkl', 'rb'))
@@ -245,258 +232,5 @@ def evaluate(
         # compute average precision
         average_precision  = _compute_ap(recall, precision)
         average_precisions[label] = average_precision
-        recalls[label] = recall
-        precisions[label] = precision
-        return_scores[label] = scores[indices]
 
-    if diagnosis:
-        return average_precisions, recalls, precisions, return_scores
-    else:
-        return average_precisions
-
-
-# Detection from an image
-# Note: Put it just under the module for pickling purpose
-class ImageDetection(namedtuple('_ImageDetection', [
-        'annotations',
-        'true_positives',
-        'false_positives'])):
-
-    __slots__ = ()
-
-    def ge_min_score(self, min_score):
-        """
-        Return detections whose scores >= min_score
-        """
-        def bfilter(bboxes):
-            return [b for b in bboxes if b[4] >= min_score]
-
-        return ImageDetection(
-            annotations=self.annotations,
-            true_positives=bfilter(self.true_positives),
-            false_positives=bfilter(self.false_positives))
-
-
-# Aggregated detections of a label
-# Note: Put it just under the module for pickling purpose
-LabelDetection = namedtuple('LabelDetection', [
-    'average_precision',
-    'recalls',
-    'precisions',
-    'scores'])
-
-
-class Diagnostic(object):
-    def __init__(self):
-        # {image path: {label: ImageDetection}}
-        self._img_dets = OrderedDict()
-
-        # After freezing this becomes.
-        # {label: LabelDetection}
-        self._lbl_dets = None
-
-    def _assert_not_freeze(self):
-        """
-        Assert when freeze has been called.
-        """
-        assert self._lbl_dets is None, 'Do not do this operation after calling freeze()'
-
-    def _assert_freeze(self):
-        """
-        Assert when freeze has not been called.
-        """
-        assert self._lbl_dets is not None, 'Call freeze() to collect label aggregated data'
-
-    def add(self, ur_img_path, label, annotations, true_positives, false_positives):
-        """
-        Add detection result of a label of an image.
-        But not all statstics are updated, call flush() to update statistics.
-
-        ur_img_path     The image path under the image root dir.
-        """
-        self._assert_not_freeze()
-
-        if ur_img_path not in self._img_dets:
-            self._img_dets[ur_img_path] = OrderedDict()
-
-        assert label not in self._img_dets[ur_img_path]
-        self._img_dets[ur_img_path][label] = ImageDetection(
-            annotations=annotations,
-            true_positives=true_positives,
-            false_positives=false_positives)
-
-    def _flush_by_label(self, label):
-        """
-        Calculate and aggregate statistics by label.
-        Return LabelDetection.
-        """
-        anns_cnt = 0
-        scores = []
-        tp_indicators = []
-        fp_indicators = []
-
-        for _, label_det_m in self._img_dets.items():
-            det = label_det_m[label]
-            anns_cnt += det.annotations.shape[0]
-
-            for each in det.true_positives:
-                scores.append(each[4])
-                tp_indicators.append(True)
-                fp_indicators.append(False)
-
-            for each in det.false_positives:
-                scores.append(each[4])
-                tp_indicators.append(False)
-                fp_indicators.append(True)
-
-        # Convert to numpy array
-        scores = np.array(scores, dtype=np.float)
-        tp_indicators = np.array(tp_indicators, dtype=np.int)
-        fp_indicators = np.array(fp_indicators, dtype=np.int)
-
-        # sort by score
-        indices = np.argsort(-scores)
-        sorted_scores = scores[indices]
-        sorted_tp_indicators = tp_indicators[indices]
-        sorted_fp_indicators = fp_indicators[indices]
-
-        sorted_tp_cumsums = np.cumsum(sorted_tp_indicators)
-        sorted_fp_cumsums = np.cumsum(sorted_fp_indicators)
-
-        # compute recall and precision
-        recalls = sorted_tp_cumsums / float(anns_cnt)
-        precisions = sorted_tp_cumsums / np.maximum(sorted_tp_cumsums + sorted_fp_cumsums, np.finfo(np.float64).eps)
-
-        # compute average precision
-        ave_precision = _compute_ap(recalls, precisions)
-
-        return LabelDetection(
-            average_precision=ave_precision,
-            recalls=recalls,
-            precisions=precisions,
-            scores=sorted_scores)
-
-    def freeze(self):
-        """
-        Calculate and aggregate statistics.
-        """
-        assert self._lbl_dets is None, 'freeze is only allowed to call ONCE'
-        self._lbl_dets = OrderedDict()
-
-        # Collect labels
-        labels = set()
-        for _, label_det_m in self._img_dets.items():
-            labels.update(label_det_m.keys())
-
-        labels = sorted(labels)
-
-        # Aggregate statistics
-        for label in labels:
-            lbl_det = self._flush_by_label(label)
-            self._lbl_dets[label] = lbl_det
-        pass
-
-    #########################
-    # High-level Statistics #
-    #########################
-    def get_labels(self):
-        """
-        Return labels in [label]
-        """
-        self._assert_freeze()
-        return list(self._lbl_dets.keys())
-
-    def get_label_detection(self, label):
-        """
-        Return LabelDetection instance with given label.
-        """
-        self._assert_freeze()
-        return self._lbl_dets[label]
-
-    def get_mAP(self):
-        """
-        Return Mean Average Precision of all detections.
-        """
-        self._assert_freeze()
-        aps = [d.average_precision for d in self._lbl_dets.values()]
-        return sum(aps) / len(aps)
-
-    #####################
-    # Detection Details #
-    #####################
-    def iter_image_paths(self):
-        return self._img_dets.keys()
-
-    def get_image_detection(self, img_path):
-        """
-        Return {label: ImageDetection} with given img_path.
-        """
-        return self._img_dets[img_path]
-
-
-def evaluate_diag(
-    generator,
-    model,
-    iou_threshold=0.5,
-    score_threshold=0.05,
-    hl_score_threshold=0.36,
-    max_detections=100,
-    save_path=None
-):
-    """ Evaluate a given dataset using a given model with various diagnostic data dumped.
-
-    # Arguments
-        generator       : The generator that represents the dataset to evaluate.
-        model           : The model to evaluate.
-        iou_threshold   : The threshold used to consider when a detection is positive or negative.
-        score_threshold : The score confidence threshold to use for detections.
-        hl_score_threshold: When the score confidence of a detection is above this threshold,
-                            hight-light this detection in orange.
-        max_detections  : The maximum number of detections to use per image.
-        save_path       : The path to save images with visualized detections to.
-    # Returns
-        Diagnostic
-    """
-    ret = Diagnostic()
-
-    # gather all detections and annotations
-    all_detections     = _get_detections(generator, model,
-                                         score_threshold=score_threshold,
-                                         hl_score_threshold=hl_score_threshold,
-                                         max_detections=max_detections,
-                                         save_path=save_path)
-    all_annotations    = _get_annotations(generator)
-
-    for i in range(generator.size()):
-        for label in range(generator.num_classes()):
-            detections           = all_detections[i][label]
-            annotations          = all_annotations[i][label]
-
-            detected_annotations = []
-            true_positives  = []
-            false_positives = []
-
-            for d in detections:
-                if annotations.shape[0] == 0:
-                    false_positives.append(d)
-                    continue
-
-                overlaps            = compute_overlap(np.expand_dims(d, axis=0), annotations)
-                assigned_annotation = np.argmax(overlaps, axis=1)
-                max_overlap         = overlaps[0, assigned_annotation]
-
-                if max_overlap >= iou_threshold and assigned_annotation not in detected_annotations:
-                    true_positives.append(d)
-                    detected_annotations.append(assigned_annotation)
-                else:
-                    false_positives.append(d)
-
-            ret.add(
-                ur_img_path=os.path.relpath(generator.image_path(i), start=generator.base_dir),
-                label=label,
-                annotations=annotations,
-                true_positives=true_positives,
-                false_positives=false_positives)
-
-    ret.freeze()
-    return ret
+    return average_precisions

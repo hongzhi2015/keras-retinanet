@@ -129,7 +129,11 @@ def create_callbacks(model, training_model, prediction_model, validation_generat
             # use prediction model for evaluation
             evaluation = CocoEval(validation_generator)
         else:
-            evaluation = Evaluate(validation_generator, iou_threshold=0.2, tensorboard=tensorboard_callback)
+            evaluation = Evaluate(validation_generator,
+                                  iou_threshold=args.val_iou_threshold,
+                                  score_threshold=args.val_score_threshold,
+                                  max_detections=args.val_max_detections,
+                                  tensorboard=tensorboard_callback)
         evaluation = RedirectModel(evaluation, prediction_model)
         callbacks.append(evaluation)
 
@@ -274,16 +278,24 @@ def parse_args(args):
     group.add_argument('--weights',           help='Initialize the model with weights from a file.')
     group.add_argument('--no-weights',        help='Don\'t initialize the model with any weights.', dest='imagenet_weights', action='store_const', const=False)
 
-    parser.add_argument('--batch-size',    help='Size of the batches.', default=4, type=int)
-    parser.add_argument('--gpu',           help='Id of the GPU to use (as reported by nvidia-smi).')
-    parser.add_argument('--multi-gpu',     help='Number of GPUs to use for parallel processing.', type=int, default=0)
-    parser.add_argument('--epochs',        help='Number of epochs to train.', type=int, default=50)
-    parser.add_argument('--steps',         help='Number of steps per epoch.', type=int, default=700)
-    parser.add_argument('--snapshot-path', help='Path to store snapshots of models during training (defaults to \'./snapshots\')', default='./snapshots')
-    parser.add_argument('--tensorboard-dir', help='Log directory for Tensorboard output', default=None)
-    parser.add_argument('--no-snapshots',  help='Disable saving snapshots.', dest='snapshots', action='store_false')
-    parser.add_argument('--no-evaluation', help='Disable per epoch evaluation.', dest='evaluation', action='store_false')
-    parser.add_argument('--image_dir', help='wher images are.', required=True)
+    parser.add_argument('--batch-size',       help='Size of the batches.', default=4, type=int)
+    parser.add_argument('--gpu',              help='Id of the GPU to use (as reported by nvidia-smi).')
+    parser.add_argument('--multi-gpu',        help='Number of GPUs to use for parallel processing.', type=int, default=0)
+    parser.add_argument('--epochs',           help='Number of epochs to train.', type=int, default=50)
+    parser.add_argument('--steps',            help='Number of steps per epoch.', type=int, default=700)
+    parser.add_argument('--snapshot-path',    help='Path to store snapshots of models during training (defaults to \'./snapshots\')', default='./snapshots')
+    parser.add_argument('--tensorboard-dir',  help='Log directory for Tensorboard output', default=None)
+    parser.add_argument('--no-snapshots',     help='Disable saving snapshots.', dest='snapshots', action='store_false')
+    parser.add_argument('--no-evaluation',    help='Disable per epoch evaluation.', dest='evaluation', action='store_false')
+    parser.add_argument('--image_dir',        help='wher images are.', required=True)
+
+    group = parser.add_argument_group('Validation Control')
+    group.add_argument('--val-score-threshold', help='Threshold on score to filter detections with for validation.',
+                       default=0.05, type=float)
+    group.add_argument('--val-iou-threshold',   help='IoU Threshold to count for a positive detection for validaton.',
+                       default=0.5, type=float)
+    group.add_argument('--val-max-detections',  help='Max Detections per image for validation.',
+                       default=100, type=int)
 
     group = parser.add_argument_group('Learning Rate Control')
     group.add_argument('--lr', help='Initial learning rate', default=1e-3, type=float)

@@ -19,7 +19,7 @@ from ..utils.eval import evaluate
 
 
 class Evaluate(keras.callbacks.Callback):
-    def __init__(self, generator, iou_threshold=0.5, score_threshold=0.05, max_detections=100, save_path=None, tensorboard=None):
+    def __init__(self, generator, iou_threshold, score_threshold, max_detections, save_path=None, tensorboard=None):
         """ Evaluate a given dataset using a given model at the end of every epoch during training.
 
         # Arguments
@@ -30,6 +30,10 @@ class Evaluate(keras.callbacks.Callback):
             save_path       : The path to save images with visualized detections to.
             tensorboard     : Instance of keras.callbacks.TensorBoard used to log the mAP value.
         """
+        assert 0.0 < iou_threshold <= 1.0
+        assert 0.0 < score_threshold <= 1.0
+        assert max_detections > 0
+
         self.generator       = generator
         self.iou_threshold   = iou_threshold
         self.score_threshold = score_threshold

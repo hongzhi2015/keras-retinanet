@@ -71,7 +71,6 @@ def parse_args(args):
 
     parser.add_argument('model',             help='Path to RetinaNet model.')
     parser.add_argument('--gpu',             help='Id of the GPU to use (as reported by nvidia-smi).')
-    parser.add_argument('--save-path',       help='Path for saving images with detections.')
     parser.add_argument('--image_dir',       help='where images are.', required=True)
     parser.add_argument('--output_metrics',  help='save the precision recalls out', required=True)
 
@@ -91,10 +90,6 @@ def main(args=None):
     if args.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
     keras.backend.tensorflow_backend.set_session(get_session())
-
-    # make save path if it doesn't exist
-    if args.save_path is not None and not os.path.exists(args.save_path):
-        os.makedirs(args.save_path)
 
     # create the generator
     generator = create_generator(args)

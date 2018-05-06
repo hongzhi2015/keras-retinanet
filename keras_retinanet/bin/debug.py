@@ -33,7 +33,7 @@ from ..preprocessing.pascal_voc import PascalVocGenerator
 from ..preprocessing.csv_generator import CSVGenerator
 from ..utils.transform import random_transform_generator
 from ..utils.visualization import draw_annotations, draw_boxes
-
+from ..utils.anchors import compute_overlap, greedy_nms
 
 def create_generator(args):
     # create random transform generator for augmenting training data
@@ -69,10 +69,12 @@ def create_generator(args):
         generator = CSVGenerator(
             args.annotations,
             args.classes,
-            # transform_generator=transform_generator
+            transform_generator=transform_generator,
             base_dir=args.image_dir,
             image_min_side=960,
-            image_max_side=1280
+            image_max_side=1280,
+            positive_overlap=args.positive_overlap,
+            negative_overlap=args.negative_overlap,
         )
     else:
         raise ValueError('Invalid data type received: {}'.format(args.dataset_type))
@@ -101,12 +103,20 @@ def parse_args(args):
     parser.add_argument('--no-resize', help='Disable image resizing.', dest='resize', action='store_false')
     parser.add_argument('--anchors', help='Show positive anchors on the image.', action='store_true')
     parser.add_argument('--annotations', help='Show annotations on the image. Green annotations have anchors, red annotations don\'t and therefore don\'t contribute to training.', action='store_true')
+    parser.add_argument('--negative-anchors', help='Show negative anchors on the image.', action='store_true')
     parser.add_argument('--random-transform', help='Randomly transform image and annotations.', action='store_true')
 
     parser.add_argument('--image-dir', help='where images are.', required=True)
+    parser.add_argument('--positive-overlap', help='positive iou', default = 0.5, type=float)
+    parser.add_argument('--negative-overlap', help='negative iou', default = 0.4, type=float)
 
     return parser.parse_args(args)
 
+def pretty_print_box(title, boxes):
+  b = boxes.astype(np.int)
+  b[:,2] = b[:, 2] - b[:, 0]
+  b[:,3] = b[:, 3] - b[:, 1]
+  print(title, b)
 
 def run(generator, args):
     # display images, one at a time
@@ -124,10 +134,27 @@ def run(generator, args):
             image, image_scale = generator.resize_image(image)
             annotations[:, :4] *= image_scale
 
+        labels, boxes, anchors = generator.anchor_targets(image.shape, annotations, generator.num_classes())
         # draw anchors on the image
         if args.anchors:
-            labels, _, anchors = generator.anchor_targets(image.shape, annotations, generator.num_classes())
             draw_boxes(image, anchors[np.max(labels, axis=1) == 1], (255, 255, 0), thickness=1)
+            pretty_print_box('positives', anchors[np.max(labels, axis=1) == 1])
+
+        if args.negative_anchors:
+            # draw negative anchors that has overlap with a annotation
+            overlaps             = compute_overlap(anchors, annotations[:, :4])
+            negative = np.max(labels, axis=1) == 0
+            has_overlap = np.max(overlaps, axis=1) > 0.001
+            selected = np.logical_and(has_overlap, negative)
+            negative_anchors = anchors[selected]
+            nms_selected = greedy_nms(negative_anchors, np.max(overlaps[selected, :], axis=1), iou_threshold=0.3)
+            negative_nms = negative_anchors[nms_selected]
+            # debug
+            # show small boxes only
+            negative_nms = np.array(sorted(negative_nms.tolist(), key = lambda x: (x[3]-x[1])*(x[2]-x[0]))[:100])
+            # debug
+            draw_boxes(image, negative_nms, (76, 0, 200), thickness=1)
+            pretty_print_box('negatives', negative_nms)
 
         # draw annotations on the image
         if args.annotations:
@@ -136,8 +163,8 @@ def run(generator, args):
 
             # draw regressed anchors in green to override most red annotations
             # result is that annotations without anchors are red, with anchors are green
-            labels, boxes, _ = generator.anchor_targets(image.shape, annotations, generator.num_classes())
             draw_boxes(image, boxes[np.max(labels, axis=1) == 1], (0, 255, 0))
+            pretty_print_box('annotations', annotations)
 
         cv2.imshow('Image', image)
         if cv2.waitKey() == ord('q'):

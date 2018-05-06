@@ -43,7 +43,12 @@ class Generator(object):
         image_min_side=600,
         image_max_side=1024,
         transform_parameters=None,
+        negative_overlap=0.4,
+        positive_overlap=0.5,
     ):
+        self.negative_overlap = negative_overlap
+        self.positive_overlap = positive_overlap
+
         self.transform_generator  = transform_generator
         self.batch_size           = int(batch_size)
         self.group_method         = group_method
@@ -218,11 +223,9 @@ class Generator(object):
         annotations,
         num_classes,
         mask_shape=None,
-        negative_overlap=0.4,
-        positive_overlap=0.5,
         **kwargs
     ):
-        return anchor_targets_bbox(image_shape, annotations, num_classes, mask_shape, negative_overlap, positive_overlap, **kwargs)
+        return anchor_targets_bbox(image_shape, annotations, num_classes, mask_shape, negative_overlap = self.negative_overlap, positive_overlap = self.positive_overlap, **kwargs)
 
     def compute_targets(self, image_group, annotations_group):
         # get the max image shape

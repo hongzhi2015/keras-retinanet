@@ -74,11 +74,11 @@ def anchors_for_shape(
     if strides is None:
         strides = [2 ** x for x in pyramid_levels]
     if sizes is None:
-        sizes = [2 ** (x + 2) for x in pyramid_levels]
+        sizes = [2 ** (x + 1) for x in pyramid_levels] # must be same as in AnchorParameters.small
     if ratios is None:
         ratios = np.array([0.5, 1, 2])
     if scales is None:
-        scales = np.array([2 ** 0])#, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)])
+        scales = np.array([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)])
 
     # skip the first two levels
     image_shape = np.array(image_shape[:2])
@@ -129,7 +129,7 @@ def generate_anchors(base_size=16, ratios=None, scales=None):
         ratios = np.array([0.5, 1, 2])
 
     if scales is None:
-        scales = np.array([2 ** 0])#, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)])
+        scales = np.array([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)])
 
     num_anchors = len(ratios) * len(scales)
 
@@ -219,3 +219,21 @@ def compute_overlap(a, b):
     intersection = iw * ih
 
     return intersection / ua
+
+def greedy_nms(anchors, scores, iou_threshold=0.45):
+    '''
+    Return the index of the selected anchors, anchors 2d array of left,top,right,bottom
+    '''
+    scores_left = np.copy(scores)
+    bad_score = -100.0
+    assert(np.max(scores) > bad_score)
+
+    selected = [] # This is where we store the boxes that make it through the non-maximum suppression
+    while np.any(scores_left > bad_score):
+        maximum_index = np.argmax(scores_left)
+        selected.append(maximum_index)
+        scores_left[maximum_index] = bad_score
+        iou = compute_overlap(np.expand_dims(anchors[maximum_index, :], 0), anchors)
+        scores_left[iou[0, :] > iou_threshold] = bad_score
+
+    return selected

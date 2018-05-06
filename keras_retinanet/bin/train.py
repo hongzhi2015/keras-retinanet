@@ -199,8 +199,8 @@ def create_generators(args):
           max_rotation=5.0/180*math.pi,
           min_translation=(-0.05, -0.05),
           max_translation=(0.05, 0.05),
-          min_shear=0,
-          max_shear=0,
+          min_shear=-5.0/180*math.pi,
+          max_shear=5.0/180*math.pi,
           min_scaling=(0.9, 0.9),
           max_scaling=(1.1, 1.1))
 
@@ -212,6 +212,8 @@ def create_generators(args):
               base_dir = args.image_dir,
             image_min_side=960,
             image_max_side=1280,
+            positive_overlap=args.positive_overlap,
+            negative_overlap=args.negative_overlap
           )
 
         if args.val_annotations:
@@ -222,6 +224,8 @@ def create_generators(args):
               base_dir = args.image_dir,
               image_min_side=960,
               image_max_side=1280,
+              positive_overlap=args.positive_overlap,
+              negative_overlap=args.negative_overlap
             )
         else:
             validation_generator = None
@@ -288,6 +292,8 @@ def parse_args(args):
     parser.add_argument('--no-snapshots',     help='Disable saving snapshots.', dest='snapshots', action='store_false')
     parser.add_argument('--no-evaluation',    help='Disable per epoch evaluation.', dest='evaluation', action='store_false')
     parser.add_argument('--image_dir',        help='wher images are.', required=True)
+    parser.add_argument('--positive-overlap', help='positive iou', default = 0.5, type=float)
+    parser.add_argument('--negative-overlap', help='negative iou', default = 0.4, type=float)
 
     group = parser.add_argument_group('Validation Control')
     group.add_argument('--val-score-threshold', help='Threshold on score to filter detections with for validation.',

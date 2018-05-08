@@ -5,10 +5,10 @@ from collections import namedtuple
 from .evaluate import CookedDiagnostic
 
 
-# key   Image key
+# img_path  Image path under root
 # fp    Number of false positives
 # fn    Number of false negatives
-Abstraction = namedtuple('Abstraction', ['key', 'fp', 'fn'])
+Abstraction = namedtuple('Abstraction', ['img_path', 'fp', 'fn'])
 
 
 def abstract(cooked_diag, out_dir):
@@ -26,7 +26,7 @@ def abstract(cooked_diag, out_dir):
             fp += len(cdet.false_positives)
             fn += len(cdet.false_negatives)
 
-        obj.append(Abstraction(os.path.basename(img_path), fp, fn)._asdict())
+        obj.append(Abstraction(img_path, fp, fn)._asdict())
 
     json_path = os.path.join(out_dir, 'abstract.json')
     with open(json_path, 'wt') as f:

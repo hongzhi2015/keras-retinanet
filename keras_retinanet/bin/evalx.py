@@ -48,9 +48,10 @@ def create_generator(args):
         validation_generator = CSVGenerator(
             args.annotations,
             args.classes,
-          base_dir = args.image_dir,
-              image_min_side=960,
-              image_max_side=1280,
+            base_dir=args.image_dir,
+            # No limit on input image size
+            image_min_side=None,
+            image_max_side=None,
         )
     else:
         raise ValueError('Invalid data type received: {}'.format(args.dataset_type))

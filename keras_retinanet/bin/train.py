@@ -205,13 +205,14 @@ def create_generators(args):
           max_scaling=(1.1, 1.1))
 
         train_generator = CSVGenerator(
-              args.annotations,
-              args.classes,
-              transform_generator=transform_generator,
-              batch_size=args.batch_size,
-              base_dir = args.image_dir,
-            image_min_side=960,
-            image_max_side=1280,
+            args.annotations,
+            args.classes,
+            transform_generator=transform_generator,
+            batch_size=args.batch_size,
+            base_dir=args.image_dir,
+            # No limit on input image size
+            image_min_side=None,
+            image_max_side=None,
             positive_overlap=args.positive_overlap,
             negative_overlap=args.negative_overlap
           )
@@ -221,11 +222,12 @@ def create_generators(args):
                 args.val_annotations,
                 args.classes,
                 batch_size=args.batch_size,
-              base_dir = args.image_dir,
-              image_min_side=960,
-              image_max_side=1280,
-              positive_overlap=args.positive_overlap,
-              negative_overlap=args.negative_overlap
+                base_dir=args.image_dir,
+                # No limit on input image size
+                image_min_side=None,
+                image_max_side=None,
+                positive_overlap=args.positive_overlap,
+                negative_overlap=args.negative_overlap
             )
         else:
             validation_generator = None

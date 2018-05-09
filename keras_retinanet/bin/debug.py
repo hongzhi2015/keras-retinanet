@@ -71,8 +71,9 @@ def create_generator(args):
             args.classes,
             transform_generator=transform_generator,
             base_dir=args.image_dir,
-            image_min_side=960,
-            image_max_side=1280,
+            # No limit on input image size
+            image_min_side=None,
+            image_max_side=None,
             positive_overlap=args.positive_overlap,
             negative_overlap=args.negative_overlap,
         )

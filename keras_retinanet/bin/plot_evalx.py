@@ -46,19 +46,9 @@ def parse_args(args):
     ##########
     # Detail #
     ##########
-    sp = sub_parsers.add_parser('detail', help='Plot detection details')
+    sp = sub_parsers.add_parser('detail', help='Plot detection details, and dump evaluation abstraction for further analysis')
     add_metrics_path(sp)
     sp.add_argument('--image-dir', help='image root directory', required=True)
-    add_score_threshold(sp)
-    add_iou_threshold(sp)
-    add_out_dir_path(sp)
-
-    ############
-    # Abstract #
-    ############
-    sp = sub_parsers.add_parser('abstract', help='Abstract evaluation result for further analysis',
-                                formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    add_metrics_path(sp)
     add_score_threshold(sp)
     add_iou_threshold(sp)
     add_out_dir_path(sp)
@@ -86,10 +76,6 @@ def main(args=None):
                                        iou_thresh=args.iou_threshold,
                                        score_range=(args.score_threshold, 1.0))
         plot_detail(image_root=args.image_dir, cooked_diag=cooked_diag, out_dir=args.output_dir)
-    elif args.sub_cmd == 'abstract':
-        cooked_diag = CookedDiagnostic(raw_diag=raw_diag,
-                                       iou_thresh=args.iou_threshold,
-                                       score_range=(args.score_threshold, 1.0))
         abstract(cooked_diag=cooked_diag, out_dir=args.output_dir)
     else:
         assert False, 'Never be here'

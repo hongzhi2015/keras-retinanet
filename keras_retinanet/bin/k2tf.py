@@ -42,8 +42,15 @@ def k2tf(k_model_path, tf_model_path):
 
     K.set_learning_phase(0)  # to get rid of learning rate and drop out
     sess = K.get_session()
+    # FIXME: Why the name of the last output needs to be replaced
     output_graph_def = graph_util.convert_variables_to_constants(sess, sess.graph.as_graph_def(),
                                                                  [model.outputs[-1].name.replace(':0', '')])
+    if False:
+        print('### INPUTS:', model.inputs)
+        print('### OUTPUTS:', model.outputs)
+        print('#### model.outputs[-1].name:', type(model.outputs[-1].name), model.outputs[-1].name)
+        print("#### model.outputs[-1].name.replace(':0', ''):", model.outputs[-1].name.replace(':0', ''))
+
     with gfile.FastGFile(tf_model_path, 'wb') as f:
         f.write(output_graph_def.SerializeToString())
 
